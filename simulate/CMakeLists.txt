@@ -44,3 +44,7 @@ link_libraries(
 add_executable(unitree_mujoco ${SIM_SRC} src/main.cc)
 
 add_executable(jstest src/joystick/jstest.cc src/joystick/joystick.cc)
+
+add_executable(test test/test_unitree_sdk2.cpp)
+
+add_executable(handstand test/handstand.cpp)
