@@ -50,3 +50,13 @@ add_executable(test test/test_unitree_sdk2.cpp)
 add_executable(handstand test/handstand.cpp)
 
 add_executable(walk test/walk.cpp)
+
+add_executable(handstand_pd test/handstand_pd.cpp)
+
+add_executable(joystick_control test/joystick_control.cpp)
+
+add_executable(keyboard_control test/keyboard_control.cpp)
+
+add_executable(sport_control test/sport_control.cpp)
+
+add_executable(gait_control test/gait_control.cpp)

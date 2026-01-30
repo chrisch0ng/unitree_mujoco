@@ -1,0 +1,1445 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Gait Controller for Go2W - Documentation</title>
+    <style>
+        body {
+            font-family: 'Calibri', 'Arial', sans-serif;
+            font-size: 11pt;
+            line-height: 1.5;
+            max-width: 8.5in;
+            margin: 1in auto;
+            padding: 0 0.5in;
+        }
+        h1 {
+            font-size: 24pt;
+            color: #1a1a1a;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+        }
+        h2 {
+            font-size: 16pt;
+            color: #2c2c2c;
+            margin-top: 24pt;
+            border-bottom: 1px solid #666;
+            padding-bottom: 5px;
+        }
+        h3 {
+            font-size: 13pt;
+            color: #333;
+            margin-top: 18pt;
+        }
+        h4 {
+            font-size: 11pt;
+            color: #444;
+            margin-top: 12pt;
+        }
+        code {
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 10pt;
+            background-color: #f4f4f4;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        pre {
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 9pt;
+            background-color: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 12px;
+            overflow-x: auto;
+            line-height: 1.4;
+        }
+        .code-section {
+            background-color: #fafafa;
+            border-left: 4px solid #4a90d9;
+            margin: 16px 0;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 16px 0;
+        }
+        th, td {
+            border: 1px solid #666;
+            padding: 8px 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #e8e8e8;
+            font-weight: bold;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .toc {
+            background-color: #f0f0f0;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .toc ul {
+            list-style-type: none;
+            padding-left: 20px;
+        }
+        .toc > ul {
+            padding-left: 0;
+        }
+        .note {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 12px;
+            margin: 16px 0;
+        }
+        .important {
+            background-color: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 12px;
+            margin: 16px 0;
+        }
+        .info {
+            background-color: #d1ecf1;
+            border-left: 4px solid #17a2b8;
+            padding: 12px;
+            margin: 16px 0;
+        }
+        .page-break {
+            page-break-before: always;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Gait Controller for Go2W</h1>
+<p><strong>MuJoCo Simulation Implementation</strong></p>
+<p><em>File: simulate/test/gait_control.cpp</em></p>
+<p><em>Date: January 2026</em></p>
+
+<div class="toc">
+<h3>Table of Contents</h3>
+<ul>
+    <li>1. <a href="#overview">Overview</a></li>
+    <li>2. <a href="#building">Building and Running</a></li>
+    <li>3. <a href="#architecture">Architecture</a>
+        <ul>
+            <li>3.1 <a href="#math-types">Math Types</a></li>
+            <li>3.2 <a href="#robot-params">Robot Parameters</a></li>
+            <li>3.3 <a href="#gait-types">Gait Types</a></li>
+            <li>3.4 <a href="#inverse-kinematics">Inverse Kinematics</a></li>
+            <li>3.5 <a href="#wave-generator">Wave Generator</a></li>
+            <li>3.6 <a href="#trajectory">Trajectory Generation</a></li>
+            <li>3.7 <a href="#controller">Gait Controller</a></li>
+        </ul>
+    </li>
+    <li>4. <a href="#controls">Keyboard Controls</a></li>
+    <li>5. <a href="#api">API Reference</a></li>
+    <li>6. <a href="#code">Complete Source Code</a></li>
+</ul>
+</div>
+
+<h2 id="overview">1. Overview</h2>
+
+<p>This document describes a gait controller implementation for the Unitree Go2W quadruped robot in the MuJoCo physics simulator. The controller implements multiple walking gaits including trot, walk, pronk, and bound, using inverse kinematics to calculate joint angles from desired foot positions.</p>
+
+<h3>Key Features</h3>
+<ul>
+    <li><strong>Multiple Gait Types:</strong> Trot, Walk, Pronk, Bound, Stand, and Custom gaits</li>
+    <li><strong>Inverse Kinematics:</strong> Converts Cartesian foot positions to joint angles</li>
+    <li><strong>Cycloid Trajectories:</strong> Smooth foot swing trajectories</li>
+    <li><strong>Wheel Control:</strong> Integrated wheel velocity control for Go2W</li>
+    <li><strong>Real-time Keyboard Control:</strong> WASD movement, gait switching, height adjustment</li>
+    <li><strong>Custom Gait Definition:</strong> User-defined gait parameters at runtime</li>
+</ul>
+
+<h3>Communication</h3>
+<p>The controller communicates with the MuJoCo simulator via DDS (Data Distribution Service) using the Unitree SDK2:</p>
+<ul>
+    <li><code>rt/lowcmd</code> - Publishes motor commands (position, velocity, torque)</li>
+    <li><code>rt/lowstate</code> - Subscribes to robot state (joint positions, IMU)</li>
+</ul>
+
+<h2 id="building">2. Building and Running</h2>
+
+<h3>Prerequisites</h3>
+<ul>
+    <li>MuJoCo physics simulator</li>
+    <li>Unitree SDK2 installed at <code>/opt/unitree_robotics</code></li>
+    <li>Dependencies: yaml-cpp, spdlog, boost, glfw3</li>
+</ul>
+
+<h3>Build Commands</h3>
+<pre>
+cd /home/chris/unitree_mujoco/simulate
+mkdir -p build && cd build
+cmake ..
+make -j4
+</pre>
+
+<h3>Running</h3>
+<p><strong>Terminal 1 - Start Simulator:</strong></p>
+<pre>
+cd /home/chris/unitree_mujoco/simulate/build
+./unitree_mujoco
+</pre>
+
+<p><strong>Terminal 2 - Start Gait Controller:</strong></p>
+<pre>
+cd /home/chris/unitree_mujoco/simulate/build
+./gait_control
+</pre>
+
+<div class="important">
+<strong>Important:</strong> Both programs must use the same <code>domain_id</code> (default: 0) to communicate. Check <code>config.yaml</code> if communication fails.
+</div>
+
+<h2 id="architecture" class="page-break">3. Architecture</h2>
+
+<h3 id="math-types">3.1 Math Types</h3>
+<p>A simple 3D vector structure for position calculations:</p>
+
+<pre class="code-section">
+struct Vec3 {
+    double x, y, z;
+    Vec3() : x(0), y(0), z(0) {}
+    Vec3(double _x, double _y, double _z) : x(_x), y(_y), z(_z) {}
+    Vec3 operator+(const Vec3& v) const { return Vec3(x+v.x, y+v.y, z+v.z); }
+    Vec3 operator-(const Vec3& v) const { return Vec3(x-v.x, y-v.y, z-v.z); }
+    Vec3 operator*(double s) const { return Vec3(x*s, y*s, z*s); }
+};
+</pre>
+
+<h3 id="robot-params">3.2 Robot Parameters</h3>
+<p>Physical dimensions of the Go2W robot:</p>
+
+<table>
+    <tr>
+        <th>Parameter</th>
+        <th>Value</th>
+        <th>Description</th>
+    </tr>
+    <tr>
+        <td>ABAD_LINK</td>
+        <td>0.0955 m</td>
+        <td>Hip abduction link length</td>
+    </tr>
+    <tr>
+        <td>HIP_LINK</td>
+        <td>0.213 m</td>
+        <td>Thigh link length</td>
+    </tr>
+    <tr>
+        <td>KNEE_LINK</td>
+        <td>0.213 m</td>
+        <td>Calf link length</td>
+    </tr>
+</table>
+
+<h4>Hip Positions (relative to body center)</h4>
+<table>
+    <tr>
+        <th>Leg</th>
+        <th>Index</th>
+        <th>X (m)</th>
+        <th>Y (m)</th>
+        <th>Side Sign</th>
+    </tr>
+    <tr>
+        <td>Front Right (FR)</td>
+        <td>0</td>
+        <td>+0.1934</td>
+        <td>-0.0465</td>
+        <td>-1</td>
+    </tr>
+    <tr>
+        <td>Front Left (FL)</td>
+        <td>1</td>
+        <td>+0.1934</td>
+        <td>+0.0465</td>
+        <td>+1</td>
+    </tr>
+    <tr>
+        <td>Rear Right (RR)</td>
+        <td>2</td>
+        <td>-0.1934</td>
+        <td>-0.0465</td>
+        <td>-1</td>
+    </tr>
+    <tr>
+        <td>Rear Left (RL)</td>
+        <td>3</td>
+        <td>-0.1934</td>
+        <td>+0.0465</td>
+        <td>+1</td>
+    </tr>
+</table>
+
+<h3 id="gait-types">3.3 Gait Types</h3>
+<p>The controller supports six gait patterns:</p>
+
+<table>
+    <tr>
+        <th>Gait</th>
+        <th>Period (s)</th>
+        <th>Stance Ratio</th>
+        <th>Phase Bias (FR, FL, RR, RL)</th>
+        <th>Description</th>
+    </tr>
+    <tr>
+        <td>Trot</td>
+        <td>0.5</td>
+        <td>0.35</td>
+        <td>(0, 0.5, 0.5, 0)</td>
+        <td>Diagonal legs move together</td>
+    </tr>
+    <tr>
+        <td>Walk</td>
+        <td>0.5</td>
+        <td>0.70</td>
+        <td>(0, 0.5, 0.6, 0.25)</td>
+        <td>Sequential stepping</td>
+    </tr>
+    <tr>
+        <td>Pronk</td>
+        <td>0.4</td>
+        <td>0.70</td>
+        <td>(0, 0, 0, 0)</td>
+        <td>All legs together (jump)</td>
+    </tr>
+    <tr>
+        <td>Bound</td>
+        <td>0.45</td>
+        <td>0.50</td>
+        <td>(0, 0, 0.5, 0.5)</td>
+        <td>Front pair, then rear pair</td>
+    </tr>
+    <tr>
+        <td>Stand</td>
+        <td>1.0</td>
+        <td>1.00</td>
+        <td>(0, 0, 0, 0)</td>
+        <td>All feet on ground</td>
+    </tr>
+    <tr>
+        <td>Custom</td>
+        <td>User-defined</td>
+        <td>User-defined</td>
+        <td>User-defined</td>
+        <td>Runtime configurable</td>
+    </tr>
+</table>
+
+<h4>Gait Parameters Structure</h4>
+<pre class="code-section">
+struct GaitParams {
+    double period;        // Gait cycle period (seconds)
+    double stanceRatio;   // Fraction of cycle in stance phase (0-1)
+    double bias[4];       // Phase offset for each leg: FR, FL, RR, RL
+    const char* name;     // Gait name for display
+};
+</pre>
+
+<h3 id="inverse-kinematics">3.4 Inverse Kinematics</h3>
+<p>The <code>LegIK</code> class calculates joint angles from foot positions using geometric inverse kinematics.</p>
+
+<h4>Joint Definitions</h4>
+<ul>
+    <li><strong>q0:</strong> Hip abduction angle (rotation about X-axis)</li>
+    <li><strong>q1:</strong> Hip flexion angle (rotation about Y-axis)</li>
+    <li><strong>q2:</strong> Knee flexion angle (rotation about Y-axis)</li>
+</ul>
+
+<h4>Joint Limits (from MuJoCo model)</h4>
+<table>
+    <tr>
+        <th>Joint</th>
+        <th>Min (rad)</th>
+        <th>Max (rad)</th>
+    </tr>
+    <tr>
+        <td>Abduction</td>
+        <td>-1.0472</td>
+        <td>+1.0472</td>
+    </tr>
+    <tr>
+        <td>Front Hip</td>
+        <td>-1.5708</td>
+        <td>+3.4907</td>
+    </tr>
+    <tr>
+        <td>Rear Hip</td>
+        <td>-0.5236</td>
+        <td>+4.5379</td>
+    </tr>
+    <tr>
+        <td>Knee</td>
+        <td>-2.7227</td>
+        <td>-0.8378</td>
+    </tr>
+</table>
+
+<h4>IK Algorithm</h4>
+<pre class="code-section">
+static void calcQ(int legID, const Vec3& footPos, double& q0, double& q1, double& q2) {
+    int sideSign = SIDE_SIGN[legID];
+
+    double px = footPos.x;
+    double py = footPos.y;
+    double pz = footPos.z;
+
+    double l1 = ABAD_LINK * sideSign;
+    double l2 = HIP_LINK;
+    double l3 = KNEE_LINK;
+
+    // Distance calculations
+    double c = sqrt(px*px + py*py + pz*pz);  // Total distance
+    double a = fabs(l1);
+    double b = sqrt(c*c - a*a);  // Distance from shoulder to foot
+
+    // Q1: Hip abduction angle
+    double L = sqrt(py*py + pz*pz - l1*l1);
+    q0 = atan2(pz*l1 + py*L, py*l1 - pz*L);
+
+    // Q3: Knee angle (law of cosines)
+    double temp = (l2*l2 + l3*l3 - b*b) / (2*l2*l3);
+    temp = fmax(-1.0, fmin(1.0, temp));  // Clamp
+    q2 = -(M_PI - acos(temp));
+
+    // Q2: Hip angle
+    double a1 = py*sin(q0) - pz*cos(q0);
+    double a2 = px;
+    double m1 = -l3*sin(q2);
+    double m2 = -l2 - l3*cos(q2);
+    q1 = atan2(m1*a1 + m2*a2, m1*a2 - m2*a1);
+}
+</pre>
+
+<h3 id="wave-generator">3.5 Wave Generator</h3>
+<p>The <code>WaveGenerator</code> class determines which legs are in stance (on ground) or swing (in air) phase based on time and gait parameters.</p>
+
+<h4>Phase Calculation</h4>
+<p>For each leg, the normalized time within the gait cycle is calculated with the leg's phase offset:</p>
+<pre class="code-section">
+normalT = fmod(passedTime + period - period * bias[leg], period) / period;
+
+if (normalT < stanceRatio) {
+    // Stance phase: foot on ground
+    contact[leg] = 1;
+    phase[leg] = normalT / stanceRatio;
+} else {
+    // Swing phase: foot in air
+    contact[leg] = 0;
+    phase[leg] = (normalT - stanceRatio) / (1.0 - stanceRatio);
+}
+</pre>
+
+<h3 id="trajectory">3.6 Trajectory Generation</h3>
+<p>Cycloid trajectories provide smooth acceleration/deceleration for foot movement:</p>
+
+<h4>Cycloid X/Y (Horizontal Movement)</h4>
+<pre class="code-section">
+static double cycloidXY(double start, double end, double phase) {
+    double phasePI = 2 * M_PI * phase;
+    return (end - start) * (phasePI - sin(phasePI)) / (2 * M_PI) + start;
+}
+</pre>
+
+<h4>Cycloid Z (Vertical Movement)</h4>
+<pre class="code-section">
+static double cycloidZ(double start, double height, double phase) {
+    double phasePI = 2 * M_PI * phase;
+    return height * (1 - cos(phasePI)) / 2 + start;
+}
+</pre>
+
+<h3 id="controller">3.7 Gait Controller</h3>
+<p>The main <code>GaitController</code> class orchestrates all components:</p>
+
+<h4>Control Loop (500 Hz)</h4>
+<ol>
+    <li>Get contact state and phase for each leg from WaveGenerator</li>
+    <li>Calculate foot positions based on stance/swing phase</li>
+    <li>For stance legs: keep foot at ground position</li>
+    <li>For swing legs: interpolate along cycloid trajectory</li>
+    <li>Convert foot positions to joint angles via inverse kinematics</li>
+    <li>Set motor commands with PD control</li>
+    <li>Control wheel velocities for Go2W</li>
+    <li>Publish commands via DDS</li>
+</ol>
+
+<h4>Motor Control Parameters</h4>
+<table>
+    <tr>
+        <th>Parameter</th>
+        <th>Value</th>
+        <th>Description</th>
+    </tr>
+    <tr>
+        <td>Kp (Position Gain)</td>
+        <td>80.0</td>
+        <td>Stiffness for joint position control</td>
+    </tr>
+    <tr>
+        <td>Kd (Velocity Gain)</td>
+        <td>5.0</td>
+        <td>Damping for joint velocity control</td>
+    </tr>
+    <tr>
+        <td>Wheel Kd</td>
+        <td>5.0</td>
+        <td>Damping for wheel velocity control</td>
+    </tr>
+</table>
+
+<h4>Motor Mapping</h4>
+<table>
+    <tr>
+        <th>Motors</th>
+        <th>Leg/Function</th>
+        <th>Joints</th>
+    </tr>
+    <tr>
+        <td>0-2</td>
+        <td>Front Right</td>
+        <td>Hip, Thigh, Calf</td>
+    </tr>
+    <tr>
+        <td>3-5</td>
+        <td>Front Left</td>
+        <td>Hip, Thigh, Calf</td>
+    </tr>
+    <tr>
+        <td>6-8</td>
+        <td>Rear Right</td>
+        <td>Hip, Thigh, Calf</td>
+    </tr>
+    <tr>
+        <td>9-11</td>
+        <td>Rear Left</td>
+        <td>Hip, Thigh, Calf</td>
+    </tr>
+    <tr>
+        <td>12-15</td>
+        <td>Wheels</td>
+        <td>FR, FL, RR, RL</td>
+    </tr>
+</table>
+
+<h2 id="controls" class="page-break">4. Keyboard Controls</h2>
+
+<table>
+    <tr>
+        <th>Key</th>
+        <th>Action</th>
+    </tr>
+    <tr>
+        <th colspan="2" style="background-color: #d0d0d0;">Movement</th>
+    </tr>
+    <tr>
+        <td>W / S</td>
+        <td>Forward / Backward</td>
+    </tr>
+    <tr>
+        <td>A / D</td>
+        <td>Turn Left / Right</td>
+    </tr>
+    <tr>
+        <td>Q / E</td>
+        <td>Strafe Left / Right</td>
+    </tr>
+    <tr>
+        <th colspan="2" style="background-color: #d0d0d0;">Gait Selection</th>
+    </tr>
+    <tr>
+        <td>1</td>
+        <td>Trot gait</td>
+    </tr>
+    <tr>
+        <td>2</td>
+        <td>Walk gait</td>
+    </tr>
+    <tr>
+        <td>3</td>
+        <td>Pronk gait</td>
+    </tr>
+    <tr>
+        <td>4</td>
+        <td>Bound gait</td>
+    </tr>
+    <tr>
+        <td>5</td>
+        <td>Stand (stationary)</td>
+    </tr>
+    <tr>
+        <td>0 / C</td>
+        <td>Custom gait (enter parameters)</td>
+    </tr>
+    <tr>
+        <td>P</td>
+        <td>Print current gait parameters</td>
+    </tr>
+    <tr>
+        <th colspan="2" style="background-color: #d0d0d0;">Height Adjustment</th>
+    </tr>
+    <tr>
+        <td>R / F</td>
+        <td>Body height Up / Down</td>
+    </tr>
+    <tr>
+        <td>T / G</td>
+        <td>Gait (step) height Up / Down</td>
+    </tr>
+    <tr>
+        <th colspan="2" style="background-color: #d0d0d0;">Other</th>
+    </tr>
+    <tr>
+        <td>H</td>
+        <td>Show help</td>
+    </tr>
+    <tr>
+        <td>ESC / X</td>
+        <td>Quit</td>
+    </tr>
+</table>
+
+<h2 id="api">5. API Reference</h2>
+
+<h3>GaitController Class</h3>
+
+<table>
+    <tr>
+        <th>Method</th>
+        <th>Description</th>
+    </tr>
+    <tr>
+        <td><code>Init()</code></td>
+        <td>Initialize DDS channels</td>
+    </tr>
+    <tr>
+        <td><code>Start()</code></td>
+        <td>Start control loop thread (500 Hz)</td>
+    </tr>
+    <tr>
+        <td><code>Stop()</code></td>
+        <td>Stop control loop</td>
+    </tr>
+    <tr>
+        <td><code>setVelocity(vx, vy, vyaw)</code></td>
+        <td>Set velocity commands (m/s, rad/s)</td>
+    </tr>
+    <tr>
+        <td><code>setGait(GaitType)</code></td>
+        <td>Switch to specified gait</td>
+    </tr>
+    <tr>
+        <td><code>getGait()</code></td>
+        <td>Get current gait type</td>
+    </tr>
+    <tr>
+        <td><code>setBodyHeight(h)</code></td>
+        <td>Set body height (0.15-0.40 m)</td>
+    </tr>
+    <tr>
+        <td><code>setGaitHeight(h)</code></td>
+        <td>Set foot lift height (0.03-0.15 m)</td>
+    </tr>
+</table>
+
+<h3>LegIK Class</h3>
+
+<table>
+    <tr>
+        <th>Method</th>
+        <th>Description</th>
+    </tr>
+    <tr>
+        <td><code>calcQ(legID, footPos, q0, q1, q2)</code></td>
+        <td>Inverse kinematics: foot position to joint angles</td>
+    </tr>
+    <tr>
+        <td><code>calcFootPos(legID, q0, q1, q2)</code></td>
+        <td>Forward kinematics: joint angles to foot position</td>
+    </tr>
+</table>
+
+<h3>Global Functions</h3>
+
+<table>
+    <tr>
+        <th>Function</th>
+        <th>Description</th>
+    </tr>
+    <tr>
+        <td><code>setCustomGait(period, stanceRatio, biasFR, biasFL, biasRR, biasRL)</code></td>
+        <td>Define custom gait parameters</td>
+    </tr>
+</table>
+
+<h2 id="code" class="page-break">6. Complete Source Code</h2>
+
+<p><strong>File:</strong> <code>simulate/test/gait_control.cpp</code></p>
+<p><strong>Lines:</strong> 743</p>
+
+<pre>
+// Gait Controller for Go2W in MuJoCo
+// Implements trot, walk, pronk, bound gaits with inverse kinematics
+// Based on Unitree's gait generation system
+
+#include &lt;iostream&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;math.h&gt;
+#include &lt;string&gt;
+#include &lt;atomic&gt;
+#include &lt;chrono&gt;
+#include &lt;termios.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;sys/time.h&gt;
+#include &lt;unitree/robot/channel/channel_publisher.hpp&gt;
+#include &lt;unitree/robot/channel/channel_subscriber.hpp&gt;
+#include &lt;unitree/idl/go2/LowState_.hpp&gt;
+#include &lt;unitree/idl/go2/LowCmd_.hpp&gt;
+#include &lt;unitree/common/time/time_tool.hpp&gt;
+#include &lt;unitree/common/thread/thread.hpp&gt;
+
+using namespace unitree::common;
+using namespace unitree::robot;
+
+#define TOPIC_LOWCMD "rt/lowcmd"
+#define TOPIC_LOWSTATE "rt/lowstate"
+
+constexpr double PosStopF = (2.146E+9f);
+constexpr double VelStopF = (16000.0f);
+
+// ============ Math Types ============
+struct Vec3 {
+    double x, y, z;
+    Vec3() : x(0), y(0), z(0) {}
+    Vec3(double _x, double _y, double _z) : x(_x), y(_y), z(_z) {}
+    Vec3 operator+(const Vec3&amp; v) const { return Vec3(x+v.x, y+v.y, z+v.z); }
+    Vec3 operator-(const Vec3&amp; v) const { return Vec3(x-v.x, y-v.y, z-v.z); }
+    Vec3 operator*(double s) const { return Vec3(x*s, y*s, z*s); }
+};
+
+// ============ Go2 Robot Parameters ============
+const double ABAD_LINK = 0.0955;   // Hip abduction link length (adjusted for Go2W)
+const double HIP_LINK = 0.213;     // Thigh link length
+const double KNEE_LINK = 0.213;    // Calf link length
+
+// Hip positions relative to body center (x, y, z)
+const Vec3 HIP_POS[4] = {
+    Vec3( 0.1934, -0.0465, 0),  // FR (leg 0)
+    Vec3( 0.1934,  0.0465, 0),  // FL (leg 1)
+    Vec3(-0.1934, -0.0465, 0),  // RR (leg 2)
+    Vec3(-0.1934,  0.0465, 0)   // RL (leg 3)
+};
+
+// Side sign for each leg (determines hip abduction direction)
+const int SIDE_SIGN[4] = {-1, 1, -1, 1};  // FR, FL, RR, RL
+
+// ============ Gait Types ============
+enum GaitType {
+    GAIT_TROT = 0,
+    GAIT_WALK = 1,
+    GAIT_PRONK = 2,
+    GAIT_BOUND = 3,
+    GAIT_STAND = 4,
+    GAIT_CUSTOM = 5
+};
+
+struct GaitParams {
+    double period;        // Gait cycle period (seconds)
+    double stanceRatio;   // Fraction of cycle in stance phase
+    double bias[4];       // Phase offset for each leg (0-1): FR, FL, RR, RL
+    const char* name;
+};
+
+// Gait definitions from mako_ctrl.cpp
+// WaveGenerator(period, stancePhaseRatio, Vec4(FR, FL, RR, RL))
+GaitParams GAITS[] = {
+    {0.5,  0.35, {0.0, 0.5, 0.5, 0.0}, "Trot"},     // Diagonal legs together
+    {0.50, 0.70, {0.0, 0.5, 0.6, 0.25}, "Walk"},    // Sequential stepping
+    {0.4,  0.70, {0.0, 0.0, 0.0, 0.0}, "Pronk"},    // All legs together (jump)
+    {0.45, 0.50, {0.0, 0.0, 0.5, 0.5}, "Bound"},    // Front pair, then rear pair
+    {1.0,  1.00, {0.0, 0.0, 0.0, 0.0}, "Stand"},    // Standing (all stance)
+    {0.5,  0.50, {0.0, 0.0, 0.0, 0.0}, "Custom"}    // User-defined (default values)
+};
+
+// Function to set custom gait parameters
+void setCustomGait(double period, double stanceRatio, double biasFR, double biasFL,
+                   double biasRR, double biasRL) {
+    GAITS[GAIT_CUSTOM].period = period;
+    GAITS[GAIT_CUSTOM].stanceRatio = fmax(0.1, fmin(0.95, stanceRatio));
+    GAITS[GAIT_CUSTOM].bias[0] = fmax(0.0, fmin(1.0, biasFR));
+    GAITS[GAIT_CUSTOM].bias[1] = fmax(0.0, fmin(1.0, biasFL));
+    GAITS[GAIT_CUSTOM].bias[2] = fmax(0.0, fmin(1.0, biasRR));
+    GAITS[GAIT_CUSTOM].bias[3] = fmax(0.0, fmin(1.0, biasRL));
+}
+
+// ============ Inverse Kinematics ============
+class LegIK {
+public:
+    // Calculate joint angles from foot position relative to hip
+    static void calcQ(int legID, const Vec3&amp; footPos, double&amp; q0, double&amp; q1, double&amp; q2) {
+        int sideSign = SIDE_SIGN[legID];
+
+        double px = footPos.x;
+        double py = footPos.y;
+        double pz = footPos.z;
+
+        double l1 = ABAD_LINK * sideSign;
+        double l2 = HIP_LINK;
+        double l3 = KNEE_LINK;
+
+        // Distance calculations
+        double c = sqrt(px*px + py*py + pz*pz);  // Total distance
+        double a = fabs(l1);
+        double b = sqrt(c*c - a*a);  // Distance from shoulder to foot
+        if (b &lt; 0.001) b = 0.001;  // Prevent divide by zero
+
+        // Q1: Hip abduction angle
+        double L = sqrt(py*py + pz*pz - l1*l1);
+        if (L &lt; 0.001) L = 0.001;
+        q0 = atan2(pz*l1 + py*L, py*l1 - pz*L);
+
+        // Q3: Knee angle
+        double temp = (l2*l2 + l3*l3 - b*b) / (2*l2*l3);
+        temp = fmax(-1.0, fmin(1.0, temp));  // Clamp to [-1, 1]
+        q2 = -(M_PI - acos(temp));  // Knee flexion (negative)
+
+        // Q2: Hip angle
+        double a1 = py*sin(q0) - pz*cos(q0);
+        double a2 = px;
+        double m1 = -l3*sin(q2);
+        double m2 = -l2 - l3*cos(q2);
+        q1 = atan2(m1*a1 + m2*a2, m1*a2 - m2*a1);
+    }
+
+    // Forward kinematics: joint angles to foot position (relative to hip)
+    static Vec3 calcFootPos(int legID, double q0, double q1, double q2) {
+        int sideSign = SIDE_SIGN[legID];
+
+        double l1 = ABAD_LINK * sideSign;
+        double l2 = -HIP_LINK;
+        double l3 = -KNEE_LINK;
+
+        double s1 = sin(q0), c1 = cos(q0);
+        double s2 = sin(q1), c2 = cos(q1);
+        double s3 = sin(q2), c3 = cos(q2);
+        double c23 = c2*c3 - s2*s3;
+        double s23 = s2*c3 + c2*s3;
+
+        Vec3 pos;
+        pos.x = l3*s23 + l2*s2;
+        pos.y = -l3*s1*c23 + l1*c1 - l2*c2*s1;
+        pos.z = l3*c1*c23 + l1*s1 + l2*c1*c2;
+
+        return pos;
+    }
+};
+
+// ============ Wave Generator ============
+class WaveGenerator {
+public:
+    GaitType currentGait;
+    double startTime;
+
+    WaveGenerator() : currentGait(GAIT_STAND), startTime(0) {
+        startTime = getTimeSeconds();
+    }
+
+    void setGait(GaitType gait) {
+        if (gait != currentGait) {
+            currentGait = gait;
+            startTime = getTimeSeconds();  // Reset phase
+        }
+    }
+
+    // Calculate contact state and phase for each leg
+    void calcContactPhase(int contact[4], double phase[4]) {
+        const GaitParams&amp; gait = GAITS[currentGait];
+        double passedTime = getTimeSeconds() - startTime;
+
+        for (int i = 0; i &lt; 4; i++) {
+            // Normalized time with phase offset
+            double normalT = fmod(passedTime + gait.period - gait.period * gait.bias[i],
+                                  gait.period) / gait.period;
+
+            if (normalT &lt; gait.stanceRatio) {
+                // Stance phase: foot on ground
+                contact[i] = 1;
+                phase[i] = normalT / gait.stanceRatio;
+            } else {
+                // Swing phase: foot in air
+                contact[i] = 0;
+                phase[i] = (normalT - gait.stanceRatio) / (1.0 - gait.stanceRatio);
+            }
+        }
+    }
+
+    double getTswing() {
+        return GAITS[currentGait].period * (1.0 - GAITS[currentGait].stanceRatio);
+    }
+    double getTstance() {
+        return GAITS[currentGait].period * GAITS[currentGait].stanceRatio;
+    }
+
+private:
+    double getTimeSeconds() {
+        struct timeval tv;
+        gettimeofday(&amp;tv, NULL);
+        return tv.tv_sec + tv.tv_usec * 1e-6;
+    }
+};
+
+// ============ Cycloid Trajectory ============
+class Trajectory {
+public:
+    // Cycloid X/Y position
+    static double cycloidXY(double start, double end, double phase) {
+        double phasePI = 2 * M_PI * phase;
+        return (end - start) * (phasePI - sin(phasePI)) / (2 * M_PI) + start;
+    }
+
+    // Cycloid Z position (foot height)
+    static double cycloidZ(double start, double height, double phase) {
+        double phasePI = 2 * M_PI * phase;
+        return height * (1 - cos(phasePI)) / 2 + start;
+    }
+};
+
+// ============ Gait Controller ============
+class GaitController {
+public:
+    GaitController() : running(true), vx(0), vy(0), vyaw(0),
+                       gaitHeight(0.08), bodyHeight(0.30) {
+        wave = new WaveGenerator();
+
+        // Initialize foot positions to standing pose
+        for (int i = 0; i &lt; 4; i++) {
+            // Default standing position relative to hip
+            standingFeet[i] = Vec3(0, SIDE_SIGN[i] * ABAD_LINK, -bodyHeight);
+            swingStart[i] = standingFeet[i];
+            swingEnd[i] = standingFeet[i];
+        }
+    }
+
+    ~GaitController() { delete wave; }
+
+    void Init();
+    void Start();
+    void Stop() { running = false; }
+
+    void setVelocity(double _vx, double _vy, double _vyaw) {
+        vx = fmax(-0.5, fmin(0.5, _vx));
+        vy = fmax(-0.3, fmin(0.3, _vy));
+        vyaw = fmax(-0.5, fmin(0.5, _vyaw));
+    }
+
+    void setGait(GaitType gait) { wave-&gt;setGait(gait); }
+    GaitType getGait() { return wave-&gt;currentGait; }
+
+    void setBodyHeight(double h) { bodyHeight = fmax(0.15, fmin(0.40, h)); }
+    void setGaitHeight(double h) { gaitHeight = fmax(0.03, fmin(0.15, h)); }
+
+private:
+    void InitLowCmd();
+    void LowStateHandler(const void* message);
+    void ControlLoop();
+    uint32_t Crc32(uint32_t* ptr, uint32_t len);
+
+    WaveGenerator* wave;
+
+    double vx, vy, vyaw;         // Velocity commands
+    double gaitHeight;            // Swing foot lift height
+    double bodyHeight;            // Body height above ground
+
+    Vec3 standingFeet[4];         // Default standing foot positions
+    Vec3 swingStart[4];           // Start position of swing
+    Vec3 swingEnd[4];             // End position of swing
+    int lastContact[4] = {1,1,1,1};
+
+    std::atomic&lt;bool&gt; running;
+
+    double Kp = 80.0;
+    double Kd = 5.0;
+
+    unitree_go::msg::dds_::LowCmd_ low_cmd{};
+    unitree_go::msg::dds_::LowState_ low_state{};
+
+    ChannelPublisherPtr&lt;unitree_go::msg::dds_::LowCmd_&gt; cmd_publisher;
+    ChannelSubscriberPtr&lt;unitree_go::msg::dds_::LowState_&gt; state_subscriber;
+    ThreadPtr control_thread;
+};
+
+uint32_t GaitController::Crc32(uint32_t* ptr, uint32_t len) {
+    uint32_t xbit = 0, data = 0;
+    uint32_t CRC32 = 0xFFFFFFFF;
+    const uint32_t polynomial = 0x04c11db7;
+
+    for (uint32_t i = 0; i &lt; len; i++) {
+        xbit = 1 &lt;&lt; 31;
+        data = ptr[i];
+        for (uint32_t bits = 0; bits &lt; 32; bits++) {
+            if (CRC32 &amp; 0x80000000) {
+                CRC32 &lt;&lt;= 1;
+                CRC32 ^= polynomial;
+            } else {
+                CRC32 &lt;&lt;= 1;
+            }
+            if (data &amp; xbit) CRC32 ^= polynomial;
+            xbit &gt;&gt;= 1;
+        }
+    }
+    return CRC32;
+}
+
+void GaitController::Init() {
+    InitLowCmd();
+
+    cmd_publisher.reset(new ChannelPublisher&lt;unitree_go::msg::dds_::LowCmd_&gt;(TOPIC_LOWCMD));
+    cmd_publisher-&gt;InitChannel();
+
+    state_subscriber.reset(
+        new ChannelSubscriber&lt;unitree_go::msg::dds_::LowState_&gt;(TOPIC_LOWSTATE));
+    state_subscriber-&gt;InitChannel(
+        std::bind(&amp;GaitController::LowStateHandler, this, std::placeholders::_1), 1);
+}
+
+void GaitController::InitLowCmd() {
+    low_cmd.head()[0] = 0xFE;
+    low_cmd.head()[1] = 0xEF;
+    low_cmd.level_flag() = 0xFF;
+    low_cmd.gpio() = 0;
+
+    for (int i = 0; i &lt; 20; i++) {
+        low_cmd.motor_cmd()[i].mode() = 0x01;
+        low_cmd.motor_cmd()[i].q() = PosStopF;
+        low_cmd.motor_cmd()[i].kp() = 0;
+        low_cmd.motor_cmd()[i].dq() = VelStopF;
+        low_cmd.motor_cmd()[i].kd() = 0;
+        low_cmd.motor_cmd()[i].tau() = 0;
+    }
+}
+
+void GaitController::LowStateHandler(const void* message) {
+    low_state = *(unitree_go::msg::dds_::LowState_*)message;
+}
+
+void GaitController::Start() {
+    control_thread = CreateRecurrentThreadEx("gait_control", UT_CPU_ID_NONE, 2000,
+                                              &amp;GaitController::ControlLoop, this);
+}
+
+void GaitController::ControlLoop() {
+    if (!running) return;
+
+    static int debugCounter = 0;
+    bool debugPrint = (debugCounter++ % 250 == 0);  // Print every 250 iterations
+
+    // Get gait phase and contact state
+    int contact[4];
+    double phase[4];
+    wave-&gt;calcContactPhase(contact, phase);
+
+    if (debugPrint) {
+        printf("\n=== DEBUG: %s Gait ===\n", GAITS[wave-&gt;currentGait].name);
+        printf("Leg:     FR(0)   FL(1)   RR(2)   RL(3)\n");
+        printf("Contact: %d       %d       %d       %d\n",
+               contact[0], contact[1], contact[2], contact[3]);
+        printf("Phase:   %.2f    %.2f    %.2f    %.2f\n",
+               phase[0], phase[1], phase[2], phase[3]);
+    }
+
+    // Calculate foot positions for each leg
+    Vec3 footPos[4];
+
+    // Initialize foot positions to standing pose
+    for (int leg = 0; leg &lt; 4; leg++) {
+        standingFeet[leg].z = -bodyHeight;
+        footPos[leg] = standingFeet[leg];
+    }
+
+    for (int leg = 0; leg &lt; 4; leg++) {
+        if (contact[leg] == 1) {
+            // Stance phase: foot stays on ground
+            if (lastContact[leg] == 0) {
+                // Just landed - use the end of swing as new stance position
+                swingStart[leg] = swingEnd[leg];
+                printf("Leg %d LANDED (swing-&gt;stance)\n", leg);
+            }
+            // Keep foot at stance position
+            footPos[leg] = swingStart[leg];
+        } else {
+            // Swing phase: foot moves to next position
+            if (lastContact[leg] == 1) {
+                // Just lifted off - start swing from current stance position
+                printf("Leg %d LIFTOFF (stance-&gt;swing)\n", leg);
+                swingStart[leg] = swingStart[leg];  // Use last stance position
+
+                // Calculate next footstep location based on velocity
+                double Tswing = wave-&gt;getTswing();
+                double Tstance = wave-&gt;getTstance();
+
+                // Raibert heuristic: step to where we need to be
+                double stepX = vx * Tstance / 2 + vx * (1 - phase[leg]) * Tswing;
+                double stepY = vy * Tstance / 2 + vy * (1 - phase[leg]) * Tswing;
+
+                // Calculate swing end position
+                swingEnd[leg].x = stepX;
+                swingEnd[leg].y = SIDE_SIGN[leg] * ABAD_LINK + stepY;
+                swingEnd[leg].z = -bodyHeight;
+            }
+
+            // Cycloid trajectory during swing
+            footPos[leg].x = Trajectory::cycloidXY(swingStart[leg].x, swingEnd[leg].x, phase[leg]);
+            footPos[leg].y = Trajectory::cycloidXY(swingStart[leg].y, swingEnd[leg].y, phase[leg]);
+            footPos[leg].z = Trajectory::cycloidZ(-bodyHeight, gaitHeight, phase[leg]);
+        }
+
+        lastContact[leg] = contact[leg];
+    }
+
+    if (debugPrint) {
+        printf("FootPos (x,y,z):\n");
+        for (int i = 0; i &lt; 4; i++) {
+            printf("  Leg%d: (%.3f, %.3f, %.3f)\n", i,
+                   footPos[i].x, footPos[i].y, footPos[i].z);
+        }
+    }
+
+    // Convert foot positions to joint angles using inverse kinematics
+    // Motor mapping: FR(0-2), FL(3-5), RR(6-8), RL(9-11), Wheels(12-15)
+    int legToMotor[4] = {0, 3, 6, 9};  // Starting motor index for each leg
+
+    double allQ[4][3];  // Store joint angles for debug
+
+    for (int leg = 0; leg &lt; 4; leg++) {
+        double q0, q1, q2;
+        LegIK::calcQ(leg, footPos[leg], q0, q1, q2);
+        allQ[leg][0] = q0; allQ[leg][1] = q1; allQ[leg][2] = q2;
+
+        int baseIdx = legToMotor[leg];
+
+        low_cmd.motor_cmd()[baseIdx + 0].q() = q0;  // Hip
+        low_cmd.motor_cmd()[baseIdx + 0].dq() = 0;
+        low_cmd.motor_cmd()[baseIdx + 0].kp() = Kp;
+        low_cmd.motor_cmd()[baseIdx + 0].kd() = Kd;
+        low_cmd.motor_cmd()[baseIdx + 0].tau() = 0;
+
+        low_cmd.motor_cmd()[baseIdx + 1].q() = q1;  // Thigh
+        low_cmd.motor_cmd()[baseIdx + 1].dq() = 0;
+        low_cmd.motor_cmd()[baseIdx + 1].kp() = Kp;
+        low_cmd.motor_cmd()[baseIdx + 1].kd() = Kd;
+        low_cmd.motor_cmd()[baseIdx + 1].tau() = 0;
+
+        low_cmd.motor_cmd()[baseIdx + 2].q() = q2;  // Calf
+        low_cmd.motor_cmd()[baseIdx + 2].dq() = 0;
+        low_cmd.motor_cmd()[baseIdx + 2].kp() = Kp;
+        low_cmd.motor_cmd()[baseIdx + 2].kd() = Kd;
+        low_cmd.motor_cmd()[baseIdx + 2].tau() = 0;
+    }
+
+    if (debugPrint) {
+        printf("Joint angles (q0, q1, q2) in rad:\n");
+        for (int i = 0; i &lt; 4; i++) {
+            const char* warn = "";
+            double hipMin = (i &lt; 2) ? -1.5708 : -0.5236;
+            double hipMax = (i &lt; 2) ? 3.4907 : 4.5379;
+            if (allQ[i][1] &lt; hipMin || allQ[i][1] &gt; hipMax) warn = " [HIP OUT OF RANGE!]";
+            if (allQ[i][2] &lt; -2.7227 || allQ[i][2] &gt; -0.83776) warn = " [KNEE OUT OF RANGE!]";
+            printf("  Leg%d: (%.3f, %.3f, %.3f) -&gt; motors %d-%d%s\n",
+                   i, allQ[i][0], allQ[i][1], allQ[i][2], legToMotor[i], legToMotor[i]+2, warn);
+        }
+        printf("===========================\n");
+        fflush(stdout);
+    }
+
+    // Wheel control for Go2W (motors 12-15)
+    double wheelSpeed = vx * 8.0;   // Scale velocity to wheel speed
+    double turnDiff = vyaw * 3.0;   // Differential for turning
+
+    for (int i = 12; i &lt; 16; i++) {
+        low_cmd.motor_cmd()[i].q() = 0;
+        low_cmd.motor_cmd()[i].kp() = 0;
+        low_cmd.motor_cmd()[i].kd() = 5.0;
+        low_cmd.motor_cmd()[i].tau() = 0;
+    }
+
+    // Right wheels (12, 14)
+    low_cmd.motor_cmd()[12].dq() = wheelSpeed - turnDiff;
+    low_cmd.motor_cmd()[14].dq() = wheelSpeed - turnDiff;
+    // Left wheels (13, 15)
+    low_cmd.motor_cmd()[13].dq() = wheelSpeed + turnDiff;
+    low_cmd.motor_cmd()[15].dq() = wheelSpeed + turnDiff;
+
+    // Publish command
+    low_cmd.crc() = Crc32((uint32_t*)&amp;low_cmd,
+                          (sizeof(unitree_go::msg::dds_::LowCmd_) &gt;&gt; 2) - 1);
+    cmd_publisher-&gt;Write(low_cmd);
+}
+
+// ============ Keyboard Input ============
+int kbhit() {
+    struct termios oldt, newt;
+    int ch, oldf;
+    tcgetattr(STDIN_FILENO, &amp;oldt);
+    newt = oldt;
+    newt.c_lflag &amp;= ~(ICANON | ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &amp;newt);
+    oldf = fcntl(STDIN_FILENO, F_GETFL, 0);
+    fcntl(STDIN_FILENO, F_SETFL, oldf | O_NONBLOCK);
+    ch = getchar();
+    tcsetattr(STDIN_FILENO, TCSANOW, &amp;oldt);
+    fcntl(STDIN_FILENO, F_SETFL, oldf);
+    if (ch != EOF) {
+        ungetc(ch, stdin);
+        return 1;
+    }
+    return 0;
+}
+
+void printHelp() {
+    std::cout &lt;&lt; "\n=== Gait Controller for Go2W ===" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "\nMovement:" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "  W/S     : Forward/Backward" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "  A/D     : Turn left/right" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "  Q/E     : Strafe left/right" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "\nGaits:" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "  1       : Trot (diagonal)" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "  2       : Walk (sequential)" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "  3       : Pronk (jump)" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "  4       : Bound (gallop)" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "  5       : Stand" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "  0/C     : Custom WaveGenerator" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "  P       : Print current gait parameters" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "\nHeight:" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "  R/F     : Body height up/down" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "  T/G     : Gait height up/down" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "\n  H       : Show this help" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "  ESC/X   : Quit" &lt;&lt; std::endl;
+    std::cout &lt;&lt; std::endl;
+}
+
+void printGaitParams(GaitType gait) {
+    const GaitParams&amp; g = GAITS[gait];
+    std::cout &lt;&lt; "\n=== Current Gait: " &lt;&lt; g.name &lt;&lt; " ===" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "WaveGenerator(" &lt;&lt; g.period &lt;&lt; ", " &lt;&lt; g.stanceRatio
+              &lt;&lt; ", Vec4(" &lt;&lt; g.bias[0] &lt;&lt; ", " &lt;&lt; g.bias[1] &lt;&lt; ", "
+              &lt;&lt; g.bias[2] &lt;&lt; ", " &lt;&lt; g.bias[3] &lt;&lt; "))" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "  Period:       " &lt;&lt; g.period &lt;&lt; " seconds" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "  Stance Ratio: " &lt;&lt; g.stanceRatio &lt;&lt; " (0-1)" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "  Phase Bias:   FR=" &lt;&lt; g.bias[0] &lt;&lt; ", FL=" &lt;&lt; g.bias[1]
+              &lt;&lt; ", RR=" &lt;&lt; g.bias[2] &lt;&lt; ", RL=" &lt;&lt; g.bias[3] &lt;&lt; std::endl;
+    std::cout &lt;&lt; std::endl;
+}
+
+void enableLineInput() {
+    struct termios t;
+    tcgetattr(STDIN_FILENO, &amp;t);
+    t.c_lflag |= (ICANON | ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &amp;t);
+}
+
+void disableLineInput() {
+    struct termios t;
+    tcgetattr(STDIN_FILENO, &amp;t);
+    t.c_lflag &amp;= ~(ICANON | ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &amp;t);
+}
+
+bool inputCustomGait() {
+    enableLineInput();
+
+    std::cout &lt;&lt; "\n=== Custom WaveGenerator ===" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "Enter gait parameters (like mako_ctrl.cpp WaveGenerator):" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "  WaveGenerator(period, stancePhaseRatio, Vec4(FR, FL, RR, RL))" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "\nPreset examples:" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "  Trot:  0.5, 0.35, 0, 0.5, 0.5, 0" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "  Walk:  0.5, 0.70, 0, 0.5, 0.6, 0.25" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "  Pronk: 0.4, 0.70, 0, 0, 0, 0" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "  Bound: 0.45, 0.5, 0, 0, 0.5, 0.5" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "\nEnter period (seconds, e.g. 0.5): ";
+
+    double period, stanceRatio, biasFR, biasFL, biasRR, biasRL;
+
+    if (!(std::cin &gt;&gt; period)) {
+        std::cin.clear();
+        std::cin.ignore(10000, '\n');
+        std::cout &lt;&lt; "Invalid input. Cancelled." &lt;&lt; std::endl;
+        disableLineInput();
+        return false;
+    }
+
+    std::cout &lt;&lt; "Enter stance ratio (0.1-0.95, e.g. 0.5): ";
+    if (!(std::cin &gt;&gt; stanceRatio)) {
+        std::cin.clear();
+        std::cin.ignore(10000, '\n');
+        std::cout &lt;&lt; "Invalid input. Cancelled." &lt;&lt; std::endl;
+        disableLineInput();
+        return false;
+    }
+
+    std::cout &lt;&lt; "Enter phase bias FR (0-1, e.g. 0): ";
+    if (!(std::cin &gt;&gt; biasFR)) {
+        std::cin.clear();
+        std::cin.ignore(10000, '\n');
+        std::cout &lt;&lt; "Invalid input. Cancelled." &lt;&lt; std::endl;
+        disableLineInput();
+        return false;
+    }
+
+    std::cout &lt;&lt; "Enter phase bias FL (0-1, e.g. 0.5): ";
+    if (!(std::cin &gt;&gt; biasFL)) {
+        std::cin.clear();
+        std::cin.ignore(10000, '\n');
+        std::cout &lt;&lt; "Invalid input. Cancelled." &lt;&lt; std::endl;
+        disableLineInput();
+        return false;
+    }
+
+    std::cout &lt;&lt; "Enter phase bias RR (0-1, e.g. 0.5): ";
+    if (!(std::cin &gt;&gt; biasRR)) {
+        std::cin.clear();
+        std::cin.ignore(10000, '\n');
+        std::cout &lt;&lt; "Invalid input. Cancelled." &lt;&lt; std::endl;
+        disableLineInput();
+        return false;
+    }
+
+    std::cout &lt;&lt; "Enter phase bias RL (0-1, e.g. 0): ";
+    if (!(std::cin &gt;&gt; biasRL)) {
+        std::cin.clear();
+        std::cin.ignore(10000, '\n');
+        std::cout &lt;&lt; "Invalid input. Cancelled." &lt;&lt; std::endl;
+        disableLineInput();
+        return false;
+    }
+
+    std::cin.ignore(10000, '\n');
+
+    setCustomGait(period, stanceRatio, biasFR, biasFL, biasRR, biasRL);
+
+    std::cout &lt;&lt; "\nCustom gait set!" &lt;&lt; std::endl;
+    printGaitParams(GAIT_CUSTOM);
+
+    disableLineInput();
+    return true;
+}
+
+int main(int argc, char** argv) {
+    std::cout &lt;&lt; "Gait Controller for Go2W (MuJoCo)" &lt;&lt; std::endl;
+    std::cout &lt;&lt; "=================================" &lt;&lt; std::endl;
+
+    ChannelFactory::Instance()-&gt;Init(0, "lo");
+
+    GaitController controller;
+    controller.Init();
+    controller.Start();
+
+    printHelp();
+
+    double vx = 0, vy = 0, vyaw = 0;
+    double bodyHeight = 0.30;
+    double gaitHeight = 0.08;
+    const double decay = 0.95;
+
+    bool running = true;
+    while (running) {
+        // Process keyboard
+        while (kbhit()) {
+            char c = getchar();
+            switch (c) {
+                // Movement
+                case 'w': case 'W': vx = 0.3; break;
+                case 's': case 'S': vx = -0.3; break;
+                case 'a': case 'A': vyaw = 0.3; break;
+                case 'd': case 'D': vyaw = -0.3; break;
+                case 'q': case 'Q': vy = 0.2; break;
+                case 'e': case 'E': vy = -0.2; break;
+
+                // Gaits
+                case '1': controller.setGait(GAIT_TROT);
+                          std::cout &lt;&lt; "Gait: Trot" &lt;&lt; std::endl; break;
+                case '2': controller.setGait(GAIT_WALK);
+                          std::cout &lt;&lt; "Gait: Walk" &lt;&lt; std::endl; break;
+                case '3': controller.setGait(GAIT_PRONK);
+                          std::cout &lt;&lt; "Gait: Pronk" &lt;&lt; std::endl; break;
+                case '4': controller.setGait(GAIT_BOUND);
+                          std::cout &lt;&lt; "Gait: Bound" &lt;&lt; std::endl; break;
+                case '5': controller.setGait(GAIT_STAND);
+                          std::cout &lt;&lt; "Gait: Stand" &lt;&lt; std::endl; break;
+                case '0': case 'c': case 'C':
+                    if (inputCustomGait()) {
+                        controller.setGait(GAIT_CUSTOM);
+                        std::cout &lt;&lt; "Gait: Custom" &lt;&lt; std::endl;
+                    }
+                    break;
+                case 'p': case 'P':
+                    printGaitParams(controller.getGait());
+                    break;
+
+                // Height
+                case 'r': case 'R':
+                    bodyHeight += 0.02;
+                    controller.setBodyHeight(bodyHeight);
+                    std::cout &lt;&lt; "Body height: " &lt;&lt; bodyHeight &lt;&lt; std::endl;
+                    break;
+                case 'f': case 'F':
+                    bodyHeight -= 0.02;
+                    controller.setBodyHeight(bodyHeight);
+                    std::cout &lt;&lt; "Body height: " &lt;&lt; bodyHeight &lt;&lt; std::endl;
+                    break;
+                case 't': case 'T':
+                    gaitHeight += 0.01;
+                    controller.setGaitHeight(gaitHeight);
+                    std::cout &lt;&lt; "Gait height: " &lt;&lt; gaitHeight &lt;&lt; std::endl;
+                    break;
+                case 'g': case 'G':
+                    gaitHeight -= 0.01;
+                    controller.setGaitHeight(gaitHeight);
+                    std::cout &lt;&lt; "Gait height: " &lt;&lt; gaitHeight &lt;&lt; std::endl;
+                    break;
+
+                // Quit
+                case 27: case 'x': case 'X':
+                    running = false;
+                    break;
+
+                case 'h': case 'H':
+                    printHelp();
+                    break;
+            }
+        }
+
+        // Decay velocities
+        vx *= decay;
+        vy *= decay;
+        vyaw *= decay;
+
+        // Apply small threshold
+        if (fabs(vx) &lt; 0.01) vx = 0;
+        if (fabs(vy) &lt; 0.01) vy = 0;
+        if (fabs(vyaw) &lt; 0.01) vyaw = 0;
+
+        controller.setVelocity(vx, vy, vyaw);
+
+        usleep(10000);  // 100 Hz main loop
+    }
+
+    controller.Stop();
+    std::cout &lt;&lt; "Exiting..." &lt;&lt; std::endl;
+
+    return 0;
+}
+</pre>
+
+<hr>
+<p style="text-align: center; color: #666; font-size: 10pt;">
+<em>Generated from gait_control.cpp - Unitree MuJoCo Simulation</em>
+</p>
+
+</body>
+</html>

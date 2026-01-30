@@ -1,7 +1,7 @@
 robot: "go2w"  # Robot name, "go2", "b2", "b2w", "h1", "go2w", "g1"
 robot_scene: "scene.xml" # Robot scene, /unitree_robots/[robot]/scene.xml 
 
-domain_id: 1  # Domain id
+domain_id: 0  # Domain id - to match the unitree sdk2 examples 
 interface: "lo" # Interface 
 
 use_joystick: 0 # Simulate Unitree WirelessController using a gamepad
