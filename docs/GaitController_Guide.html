@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Go2W Gait Controller Guide</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; line-height: 1.6; }
+        h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+        h2 { color: #2980b9; border-bottom: 1px solid #bdc3c7; padding-bottom: 5px; margin-top: 30px; }
+        h3 { color: #27ae60; }
+        code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-family: monospace; }
+        pre { background: #2c3e50; color: #ecf0f1; padding: 15px; border-radius: 5px; overflow-x: auto; }
+        table { border-collapse: collapse; width: 100%; margin: 15px 0; }
+        th, td { border: 1px solid #bdc3c7; padding: 10px; text-align: left; }
+        th { background: #3498db; color: white; }
+        tr:nth-child(even) { background: #f9f9f9; }
+        .warning { background: #fff3cd; border-left: 4px solid #ffc107; padding: 10px 15px; margin: 15px 0; }
+        .info { background: #d1ecf1; border-left: 4px solid #17a2b8; padding: 10px 15px; margin: 15px 0; }
+        .param-section { background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+
+<h1>Go2W Gait Controller Guide</h1>
+<p><strong>MuJoCo Simulation for Unitree Go2W Robot</strong></p>
+
+<h2>1. Running the Simulation</h2>
+
+<h3>1.1 Prerequisites</h3>
+<ul>
+    <li>MuJoCo simulator installed</li>
+    <li>Unitree SDK2 compiled</li>
+    <li>Go2W robot model in <code>unitree_robots/go2w/</code></li>
+</ul>
+
+<h3>1.2 Configuration</h3>
+<p>Edit <code>simulate/config.yaml</code> to set the robot:</p>
+<pre>
+robot: "go2w"           # Robot name
+robot_scene: "scene.xml" # Scene file
+domain_id: 0            # DDS domain
+interface: "lo"         # Network interface (lo = localhost for sim)
+</pre>
+
+<h3>1.3 Starting the Simulation</h3>
+<p>Open two terminals:</p>
+
+<p><strong>Terminal 1 - Start MuJoCo Viewer:</strong></p>
+<pre>
+cd ~/unitree_mujoco/simulate
+./build/unitree_mujoco
+</pre>
+
+<p><strong>Terminal 2 - Start Gait Controller:</strong></p>
+<pre>
+cd ~/unitree_mujoco/simulate
+./build/gait_control
+</pre>
+
+<h3>1.4 Keyboard Controls</h3>
+<table>
+    <tr><th>Key</th><th>Action</th></tr>
+    <tr><td>W / S</td><td>Move forward / backward</td></tr>
+    <tr><td>A / D</td><td>Turn left / right</td></tr>
+    <tr><td>Q / E</td><td>Strafe left / right</td></tr>
+    <tr><td>1</td><td>Trot gait (diagonal pairs)</td></tr>
+    <tr><td>2</td><td>Walk gait (sequential)</td></tr>
+    <tr><td>3</td><td>Pronk gait (jump)</td></tr>
+    <tr><td>4</td><td>Bound gait (gallop)</td></tr>
+    <tr><td>5</td><td>Stand (stationary)</td></tr>
+    <tr><td>0 / C</td><td>Custom gait (enter parameters)</td></tr>
+    <tr><td>R / F</td><td>Body height up / down</td></tr>
+    <tr><td>T / G</td><td>Gait (foot lift) height up / down</td></tr>
+    <tr><td>P</td><td>Print current gait parameters</td></tr>
+    <tr><td>H</td><td>Show help</td></tr>
+    <tr><td>ESC / X</td><td>Quit</td></tr>
+</table>
+
+<h2>2. Tunable Parameters</h2>
+<p>All parameters are at the top of <code>simulate/test/gait_control.cpp</code></p>
+
+<h3>2.1 Body & Stance Parameters</h3>
+<div class="param-section">
+<table>
+    <tr><th>Parameter</th><th>Default</th><th>Range</th><th>Description</th></tr>
+    <tr>
+        <td><code>DEFAULT_BODY_HEIGHT</code></td>
+        <td>0.30 m</td>
+        <td>0.15 - 0.40</td>
+        <td>How high the robot body is from ground. Lower = more stable, Higher = longer leg reach</td>
+    </tr>
+    <tr>
+        <td><code>DEFAULT_GAIT_HEIGHT</code></td>
+        <td>0.08 m</td>
+        <td>0.03 - 0.15</td>
+        <td>How high feet lift during swing phase. Higher = clears obstacles better but slower</td>
+    </tr>
+</table>
+</div>
+
+<h3>2.2 Motor Control Gains</h3>
+<div class="param-section">
+<table>
+    <tr><th>Parameter</th><th>Default</th><th>Description</th></tr>
+    <tr>
+        <td><code>MOTOR_KP</code></td>
+        <td>80.0</td>
+        <td><strong>Position gain (stiffness)</strong> - Higher = stiffer joints, faster response. Too high causes vibration</td>
+    </tr>
+    <tr>
+        <td><code>MOTOR_KD</code></td>
+        <td>5.0</td>
+        <td><strong>Velocity gain (damping)</strong> - Higher = more damping, less oscillation. Too high = sluggish</td>
+    </tr>
+</table>
+</div>
+
+<h3>2.3 Velocity Limits</h3>
+<div class="param-section">
+<table>
+    <tr><th>Parameter</th><th>Default</th><th>Description</th></tr>
+    <tr><td><code>MAX_VX</code></td><td>0.5 m/s</td><td>Maximum forward/backward speed</td></tr>
+    <tr><td><code>MAX_VY</code></td><td>0.3 m/s</td><td>Maximum strafe (sideways) speed</td></tr>
+    <tr><td><code>MAX_VYAW</code></td><td>0.5 rad/s</td><td>Maximum turning speed</td></tr>
+</table>
+</div>
+
+<h3>2.4 Keyboard Velocity Commands</h3>
+<div class="param-section">
+<table>
+    <tr><th>Parameter</th><th>Default</th><th>Description</th></tr>
+    <tr><td><code>KEY_VX</code></td><td>0.3 m/s</td><td>Speed when pressing W/S</td></tr>
+    <tr><td><code>KEY_VY</code></td><td>0.2 m/s</td><td>Speed when pressing Q/E</td></tr>
+    <tr><td><code>KEY_VYAW</code></td><td>0.3 rad/s</td><td>Speed when pressing A/D</td></tr>
+    <tr><td><code>VELOCITY_DECAY</code></td><td>0.95</td><td>How fast velocity decays when key released (0.9=fast stop, 0.99=coast)</td></tr>
+</table>
+</div>
+
+<h3>2.5 Swing Compensation</h3>
+<p>Compensates for back leg joint limits. Back legs have restricted hip range and need offset when lifting.</p>
+<div class="param-section">
+<table>
+    <tr><th>Parameter</th><th>Default</th><th>Description</th></tr>
+    <tr><td><code>COMP_TROT_WALK_BACK</code></td><td>1.0</td><td>Back leg compensation for trot/walk gaits</td></tr>
+    <tr><td><code>COMP_PRONK_BACK</code></td><td>1.2</td><td>Back leg compensation for pronk/bound</td></tr>
+    <tr><td><code>COMP_PRONK_FRONT</code></td><td>0.5</td><td>Front leg compensation for pronk/bound</td></tr>
+</table>
+</div>
+
+<h3>2.6 Pronk (Jump) Parameters</h3>
+<p>Controls the crouch-push-flight cycle for jumping motion.</p>
+<div class="param-section">
+<table>
+    <tr><th>Parameter</th><th>Default</th><th>Description</th></tr>
+    <tr>
+        <td><code>PRONK_CROUCH_DEPTH</code></td>
+        <td>0.06 m</td>
+        <td>How much to crouch down before jump. Deeper = more power but slower</td>
+    </tr>
+    <tr>
+        <td><code>PRONK_EXTEND_HEIGHT</code></td>
+        <td>0.04 m</td>
+        <td>How much to extend above nominal height. Higher = more explosive push</td>
+    </tr>
+    <tr>
+        <td><code>PRONK_TUCK_HEIGHT</code></td>
+        <td>0.04 m</td>
+        <td>How much to tuck feet during flight phase</td>
+    </tr>
+</table>
+</div>
+
+<h3>2.7 Wheel Control (Go2W)</h3>
+<div class="param-section">
+<table>
+    <tr><th>Parameter</th><th>Default</th><th>Description</th></tr>
+    <tr><td><code>WHEEL_SPEED_SCALE</code></td><td>8.0</td><td>Multiplier from vx to wheel speed</td></tr>
+    <tr><td><code>WHEEL_TURN_SCALE</code></td><td>3.0</td><td>Differential speed for turning</td></tr>
+    <tr><td><code>WHEEL_KD</code></td><td>5.0</td><td>Wheel damping gain</td></tr>
+</table>
+</div>
+
+<h2>3. Gait Timing Parameters</h2>
+<p>Defined in the <code>GAITS[]</code> array. Each gait has:</p>
+
+<div class="param-section">
+<table>
+    <tr><th>Field</th><th>Range</th><th>Description</th></tr>
+    <tr>
+        <td><code>period</code></td>
+        <td>0.3 - 1.0 sec</td>
+        <td>Total gait cycle time. Shorter = faster cadence, Longer = slower, more deliberate</td>
+    </tr>
+    <tr>
+        <td><code>stanceRatio</code></td>
+        <td>0.1 - 0.95</td>
+        <td>Fraction of cycle foot is on ground. Lower = more air time (bouncy), Higher = more stable</td>
+    </tr>
+    <tr>
+        <td><code>bias[4]</code></td>
+        <td>0.0 - 1.0</td>
+        <td>Phase offset for each leg: {FR, FL, RR, RL}. When each leg starts its cycle</td>
+    </tr>
+</table>
+</div>
+
+<h3>3.1 Default Gait Definitions</h3>
+<pre>
+// {period, stanceRatio, {FR, FL, RR, RL}, "name"}
+{0.5,  0.35, {0.0, 0.5, 0.5, 0.0}, "Trot"}    // Diagonal pairs together
+{0.40, 0.60, {0.0, 0.5, 0.50, 0.0}, "Walk"}   // Walking trot
+{0.5,  0.30, {0.0, 0.0, 0.0, 0.0}, "Pronk"}   // All legs together (jump)
+{0.45, 0.50, {0.0, 0.0, 0.5, 0.5}, "Bound"}   // Front/back pairs
+{1.0,  1.0,  {0.0, 0.0, 0.0, 0.0}, "Stand"}   // All stance (stationary)
+</pre>
+
+<h3>3.2 Phase Bias Patterns</h3>
+<table>
+    <tr><th>Pattern</th><th>FR</th><th>FL</th><th>RR</th><th>RL</th><th>Description</th></tr>
+    <tr><td>Trot</td><td>0.0</td><td>0.5</td><td>0.5</td><td>0.0</td><td>Diagonal pairs move together</td></tr>
+    <tr><td>Walk</td><td>0.0</td><td>0.25</td><td>0.5</td><td>0.75</td><td>Sequential, one leg at a time</td></tr>
+    <tr><td>Pronk</td><td>0.0</td><td>0.0</td><td>0.0</td><td>0.0</td><td>All legs synchronized (jumping)</td></tr>
+    <tr><td>Bound</td><td>0.0</td><td>0.0</td><td>0.5</td><td>0.5</td><td>Front pair, then back pair</td></tr>
+</table>
+
+<h2>4. Tuning Tips</h2>
+
+<h3>4.1 For Faster Walking</h3>
+<ul>
+    <li>Decrease <code>period</code> (faster cycle)</li>
+    <li>Increase <code>KEY_VX</code> (higher velocity command)</li>
+    <li>Decrease <code>DEFAULT_GAIT_HEIGHT</code> (less time lifting feet)</li>
+</ul>
+
+<h3>4.2 For More Stability</h3>
+<ul>
+    <li>Increase <code>stanceRatio</code> (more time with feet on ground)</li>
+    <li>Lower <code>DEFAULT_BODY_HEIGHT</code> (lower center of gravity)</li>
+    <li>Increase <code>MOTOR_KD</code> (more damping)</li>
+</ul>
+
+<h3>4.3 For Higher Jumps (Pronk)</h3>
+<ul>
+    <li>Increase <code>PRONK_CROUCH_DEPTH</code> (deeper crouch = more power)</li>
+    <li>Increase <code>PRONK_EXTEND_HEIGHT</code> (more explosive extension)</li>
+    <li>Decrease pronk <code>stanceRatio</code> (more time in air)</li>
+    <li>Increase <code>PRONK_TUCK_HEIGHT</code> (tuck feet more during flight)</li>
+</ul>
+
+<h3>4.4 If Back Legs Drag</h3>
+<ul>
+    <li>Increase <code>COMP_TROT_WALK_BACK</code> (more backward offset)</li>
+    <li>Increase <code>DEFAULT_GAIT_HEIGHT</code> (lift feet higher)</li>
+</ul>
+
+<h2>5. Deploying to Real Robot</h2>
+
+<div class="warning">
+<strong>WARNING:</strong> Test thoroughly in simulation before running on real hardware!
+</div>
+
+<h3>5.1 Configuration Changes</h3>
+<p>Edit <code>config.yaml</code>:</p>
+<pre>
+interface: "eth0"  # Change from "lo" to your network interface
+</pre>
+
+<h3>5.2 Safety Checklist</h3>
+<ol>
+    <li>Ensure robot is on a flat, clear surface</li>
+    <li>Have emergency stop ready</li>
+    <li>Release sport mode first (robot must be in low-level control mode)</li>
+    <li>Start with Stand gait (key 5) before any movement</li>
+    <li>Test movements slowly with low velocity first</li>
+</ol>
+
+<h3>5.3 Network Setup</h3>
+<p>The robot and controller must be on the same network with matching <code>domain_id</code>.</p>
+
+<h2>6. File Locations</h2>
+<table>
+    <tr><th>File</th><th>Purpose</th></tr>
+    <tr><td><code>simulate/test/gait_control.cpp</code></td><td>Main gait controller source code</td></tr>
+    <tr><td><code>simulate/config.yaml</code></td><td>Simulation configuration</td></tr>
+    <tr><td><code>unitree_robots/go2w/go2w.xml</code></td><td>Robot model (joint limits, masses, etc.)</td></tr>
+    <tr><td><code>unitree_robots/go2w/scene.xml</code></td><td>Simulation scene</td></tr>
+</table>
+
+<h2>7. Building After Changes</h2>
+<p>After modifying <code>gait_control.cpp</code>:</p>
+<pre>
+cd ~/unitree_mujoco/simulate
+cmake --build build --target gait_control
+</pre>
+
+</body>
+</html>

@@ -2,6 +2,104 @@
 // Implements trot, walk, pronk, bound gaits with inverse kinematics
 // Based on Unitree's gait generation system
 
+// ============================================================================
+// ====================== TUNABLE PARAMETERS ==================================
+// ============================================================================
+// All adjustable parameters are defined here for easy tuning.
+// Modify these values to change robot behavior.
+
+// ---------- BODY & STANCE PARAMETERS ----------
+// These control the robot's default posture
+
+constexpr double DEFAULT_BODY_HEIGHT = 0.30;  // meters - How high the body is from ground
+                                               // Range: 0.15 to 0.40
+                                               // Lower = more stable, Higher = longer reach
+
+constexpr double DEFAULT_GAIT_HEIGHT = 0.08;  // meters - How high feet lift during swing
+                                               // Range: 0.03 to 0.15
+                                               // Higher = clears obstacles better, but slower
+
+// ---------- MOTOR CONTROL GAINS ----------
+// PD controller gains for joint position control
+
+constexpr double MOTOR_KP = 80.0;   // Position gain (stiffness)
+                                     // Higher = stiffer joints, faster response
+                                     // Too high = vibration/instability
+
+constexpr double MOTOR_KD = 5.0;    // Velocity gain (damping)
+                                     // Higher = more damping, less oscillation
+                                     // Too high = sluggish response
+
+// ---------- VELOCITY LIMITS ----------
+// Maximum speeds the robot can achieve
+
+constexpr double MAX_VX = 0.5;       // m/s - Max forward/backward speed
+constexpr double MAX_VY = 0.3;       // m/s - Max strafe (sideways) speed
+constexpr double MAX_VYAW = 0.5;     // rad/s - Max turning speed
+
+// ---------- KEYBOARD VELOCITY COMMANDS ----------
+// Speed when pressing movement keys
+
+constexpr double KEY_VX = 0.3;       // m/s - Forward/backward (W/S keys)
+constexpr double KEY_VY = 0.2;       // m/s - Strafe left/right (Q/E keys)
+constexpr double KEY_VYAW = 0.3;     // rad/s - Turn left/right (A/D keys)
+constexpr double VELOCITY_DECAY = 0.95;  // How fast velocity decays when key released
+                                          // 0.9 = fast stop, 0.99 = coast longer
+
+// ---------- SWING COMPENSATION ----------
+// Compensates for back leg joint limits during foot lift
+// Back legs have restricted hip range, need more backward offset when lifting
+
+constexpr double COMP_TROT_WALK_BACK = 1.5;   // Back leg compensation for trot/walk
+                                               // Higher = feet swing more backward
+
+constexpr double COMP_PRONK_BACK = 1.2;       // Back leg compensation for pronk/bound
+constexpr double COMP_PRONK_FRONT = 0.5;      // Front leg compensation for pronk/bound
+
+// ---------- PRONK (JUMP) PARAMETERS ----------
+// Controls the crouch-push-flight cycle for jumping
+
+constexpr double PRONK_CROUCH_DEPTH = 0.06;   // meters - How much to crouch down before jump
+                                               // Deeper crouch = more power, but slower
+
+constexpr double PRONK_EXTEND_HEIGHT = 0.04;  // meters - How much to extend above nominal
+                                               // Higher = more explosive push
+
+constexpr double PRONK_TUCK_HEIGHT = 0.04;    // meters - How much to tuck feet during flight
+                                               // Higher = feet pulled up more in air
+
+// ---------- WHEEL CONTROL ----------
+// For Go2W wheeled variant
+
+constexpr double WHEEL_SPEED_SCALE = 8.0;     // Multiplier from vx to wheel speed
+constexpr double WHEEL_TURN_SCALE = 3.0;      // Differential speed for turning
+constexpr double WHEEL_KD = 5.0;              // Wheel damping gain
+
+// ---------- GAIT TIMING PARAMETERS ----------
+// Defined in GAITS[] array below. Format:
+//   {period, stanceRatio, {FR, FL, RR, RL phase biases}, "name"}
+//
+// period:      Total gait cycle time in seconds (0.3-1.0 typical)
+//              Shorter = faster cadence, Longer = slower, more deliberate
+//
+// stanceRatio: Fraction of cycle foot is on ground (0.1-0.95)
+//              Lower = more time in air (bouncy), Higher = more time on ground (stable)
+//              For jumping (pronk): use 0.2-0.4 for more air time
+//
+// phase bias:  When each leg starts its cycle (0.0-1.0)
+//              0.0 = starts at beginning, 0.5 = starts halfway through
+//              FR=Front Right, FL=Front Left, RR=Rear Right, RL=Rear Left
+//
+//              Common patterns:
+//              - Trot: diagonal pairs together {0, 0.5, 0.5, 0}
+//              - Walk: sequential {0, 0.25, 0.5, 0.75}
+//              - Pronk: all together {0, 0, 0, 0}
+//              - Bound: front/back pairs {0, 0, 0.5, 0.5}
+
+// ============================================================================
+// ====================== END TUNABLE PARAMETERS ==============================
+// ============================================================================
+
 #include <iostream>
 #include <stdio.h>
 #include <stdint.h>
@@ -247,7 +345,7 @@ public:
 // ============ Gait Controller ============
 class GaitController {
 public:
-    GaitController() : running(true), vx(0), vy(0), vyaw(0), gaitHeight(0.08), bodyHeight(0.30) {
+    GaitController() : running(true), vx(0), vy(0), vyaw(0), gaitHeight(DEFAULT_GAIT_HEIGHT), bodyHeight(DEFAULT_BODY_HEIGHT) {
         wave = new WaveGenerator();
 
         // Initialize foot positions to standing pose
@@ -266,9 +364,9 @@ public:
     void Stop() { running = false; }
 
     void setVelocity(double _vx, double _vy, double _vyaw) {
-        vx = fmax(-0.5, fmin(0.5, _vx));
-        vy = fmax(-0.3, fmin(0.3, _vy));
-        vyaw = fmax(-0.5, fmin(0.5, _vyaw));
+        vx = fmax(-MAX_VX, fmin(MAX_VX, _vx));
+        vy = fmax(-MAX_VY, fmin(MAX_VY, _vy));
+        vyaw = fmax(-MAX_VYAW, fmin(MAX_VYAW, _vyaw));
     }
 
     void setGait(GaitType gait) { wave->setGait(gait); }
@@ -296,8 +394,8 @@ private:
 
     std::atomic<bool> running;
 
-    double Kp = 80.0;
-    double Kd = 5.0;
+    double Kp = MOTOR_KP;
+    double Kd = MOTOR_KD;
 
     unitree_go::msg::dds_::LowCmd_ low_cmd{};
     unitree_go::msg::dds_::LowState_ low_state{};
@@ -405,8 +503,8 @@ void GaitController::ControlLoop() {
             // stancePhase goes 0->1 during stance
             // 0-0.5: crouch (lower body)
             // 0.5-1.0: extend (raise body to push off)
-            double crouchDepth = 0.06;  // How much to crouch down
-            double extendHeight = 0.04; // How much to extend up from nominal
+            double crouchDepth = PRONK_CROUCH_DEPTH;
+            double extendHeight = PRONK_EXTEND_HEIGHT;
 
             if (stancePhase < 0.5) {
                 // Crouch phase: lower body
@@ -422,7 +520,7 @@ void GaitController::ControlLoop() {
         } else {
             // Swing/flight phase: tuck feet (effectively shorter body height command)
             // This makes legs retract during flight
-            effectiveBodyHeight = bodyHeight - 0.04;
+            effectiveBodyHeight = bodyHeight - PRONK_TUCK_HEIGHT;
         }
     }
 
@@ -446,9 +544,8 @@ void GaitController::ControlLoop() {
         } else {
             // Swing phase: foot moves to next position
             if (lastContact[leg] == 1) {
-                // Just lifted off - start swing from current stance position
-                // printf("Leg %d LIFTOFF (stance->swing)\n", leg);
-                swingStart[leg] = swingStart[leg];  // Use last stance position
+                // Just lifted off - record current stance position as swing start
+                // swingStart stays at its current value (set from last landing)
 
                 // Calculate next footstep location based on velocity
                 double Tswing = wave->getTswing();
@@ -470,21 +567,28 @@ void GaitController::ControlLoop() {
             double liftHeight = swingZ - (-effectiveBodyHeight);
 
             // Compensation for joint limits during swing
-            // Back legs have restricted hip range - must offset foot position during lift
-            // Direction depends on movement: backward when moving forward, forward when moving backward
+            // Back legs have restricted hip range - need backward offset to lift properly
             GaitType currentGait = wave->currentGait;
-            double compensationDir = (vx >= 0) ? -1.0 : 1.0;  // Flip for backward walking
 
-            if (currentGait == GAIT_TROT || currentGait == GAIT_WALK) {
-                if (leg >= 2) {
-                    swingX += compensationDir * liftHeight * 1.0;
+            if (fabs(vx) > 0.05) {
+                // Moving: directional compensation
+                double compensationDir = (vx > 0) ? -1.0 : 1.0;
+
+                if (currentGait == GAIT_TROT || currentGait == GAIT_WALK || currentGait == GAIT_BOUND) {
+                    if (leg >= 2) {
+                        swingX += compensationDir * liftHeight * COMP_TROT_WALK_BACK;
+                    }
+                } else if (currentGait == GAIT_PRONK) {
+                    if (leg >= 2) {
+                        swingX += compensationDir * liftHeight * COMP_PRONK_BACK;
+                    } else {
+                        swingX += compensationDir * liftHeight * COMP_PRONK_FRONT;
+                    }
                 }
-            } else if (currentGait == GAIT_PRONK || currentGait == GAIT_BOUND) {
-                // Back legs need more compensation due to restricted hip joint range
+            } else {
+                // Standing still: backward offset for back legs to allow lifting
                 if (leg >= 2) {
-                    swingX += compensationDir * liftHeight * 1.2;  // Back legs
-                } else {
-                    swingX += compensationDir * liftHeight * 0.5;  // Front legs
+                    swingX -= liftHeight * 1.0;
                 }
             }
 
@@ -559,13 +663,13 @@ apply_ik:
 
     // Wheel control for Go2W (motors 12-15)
     // Use wheels for forward/backward motion when standing or slow walk
-    double wheelSpeed = vx * 8.0;  // Scale velocity to wheel speed
-    double turnDiff = vyaw * 3.0;   // Differential for turning
+    double wheelSpeed = vx * WHEEL_SPEED_SCALE;
+    double turnDiff = vyaw * WHEEL_TURN_SCALE;
 
     for (int i = 12; i < 16; i++) {
         low_cmd.motor_cmd()[i].q() = 0;
         low_cmd.motor_cmd()[i].kp() = 0;
-        low_cmd.motor_cmd()[i].kd() = 5.0;
+        low_cmd.motor_cmd()[i].kd() = WHEEL_KD;
         low_cmd.motor_cmd()[i].tau() = 0;
     }
 
@@ -745,9 +849,9 @@ int main(int argc, char** argv) {
     printHelp();
 
     double vx = 0, vy = 0, vyaw = 0;
-    double bodyHeight = 0.30;
-    double gaitHeight = 0.08;
-    const double decay = 0.95;
+    double bodyHeight = DEFAULT_BODY_HEIGHT;
+    double gaitHeight = DEFAULT_GAIT_HEIGHT;
+    const double decay = VELOCITY_DECAY;
 
     bool running = true;
     while (running) {
@@ -756,12 +860,12 @@ int main(int argc, char** argv) {
             char c = getchar();
             switch (c) {
                 // Movement
-                case 'w': case 'W': vx = 0.3; break;
-                case 's': case 'S': vx = -0.3; break;
-                case 'a': case 'A': vyaw = 0.3; break;
-                case 'd': case 'D': vyaw = -0.3; break;
-                case 'q': case 'Q': vy = 0.2; break;
-                case 'e': case 'E': vy = -0.2; break;
+                case 'w': case 'W': vx = KEY_VX; break;
+                case 's': case 'S': vx = -KEY_VX; break;
+                case 'a': case 'A': vyaw = KEY_VYAW; break;
+                case 'd': case 'D': vyaw = -KEY_VYAW; break;
+                case 'q': case 'Q': vy = KEY_VY; break;
+                case 'e': case 'E': vy = -KEY_VY; break;
 
                 // Gaits
                 case '1': controller.setGait(GAIT_TROT); std::cout << "Gait: Trot" << std::endl; break;
