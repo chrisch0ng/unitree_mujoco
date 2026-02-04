@@ -1,0 +1,116 @@
+<mujoco model="go2_with_piper_arm">
+  <!-- Include the base Go2 robot -->
+  <include file="go2.xml"/>
+
+  <!-- Default settings for arm -->
+  <default>
+    <default class="piper_arm">
+      <joint damping="0.5" armature="0.01" frictionloss="0.1"/>
+      <motor ctrlrange="-10 10"/>
+      <geom rgba="0.2 0.6 0.8 1" />
+    </default>
+  </default>
+
+  <!-- Assets for arm -->
+  <asset>
+    <material name="arm_base" rgba="0.2 0.2 0.2 1" />
+    <material name="arm_link" rgba="0.8 0.8 0.8 1" />
+    <material name="arm_joint" rgba="0.3 0.3 0.3 1" />
+    <material name="gripper" rgba="0.9 0.2 0.2 1" />
+  </asset>
+
+  <!-- Add arm to robot body -->
+  <worldbody>
+    <!-- Attach arm to the front of the robot body -->
+    <body name="piper_base" pos="0.2 0 0.15" quat="0.707 0 0.707 0" childclass="piper_arm">
+      <!-- Base link -->
+      <geom name="arm_base_geom" type="cylinder" size="0.04 0.03" material="arm_base"/>
+      
+      <!-- Joint 1: Base rotation -->
+      <joint name="arm_joint1" type="hinge" axis="0 0 1" range="-3.14 3.14"/>
+      <body name="arm_link1" pos="0 0 0.05">
+        <geom name="arm_link1_geom" type="capsule" size="0.025 0.08" pos="0 0 0.04" material="arm_link"/>
+        
+        <!-- Joint 2: Shoulder -->
+        <joint name="arm_joint2" type="hinge" axis="0 1 0" range="-2.35 2.35"/>
+        <body name="arm_link2" pos="0 0 0.12">
+          <geom name="arm_link2_geom" type="capsule" size="0.022 0.1" pos="0 0 0.05" material="arm_link"/>
+          
+          <!-- Joint 3: Elbow -->
+          <joint name="arm_joint3" type="hinge" axis="0 1 0" range="-2.0 2.0"/>
+          <body name="arm_link3" pos="0 0 0.12">
+            <geom name="arm_link3_geom" type="capsule" size="0.02 0.08" pos="0 0 0.04" material="arm_link"/>
+            
+            <!-- Joint 4: Wrist roll -->
+            <joint name="arm_joint4" type="hinge" axis="0 0 1" range="-3.14 3.14"/>
+            <body name="arm_link4" pos="0 0 0.1">
+              <geom name="arm_link4_geom" type="cylinder" size="0.018 0.03" material="arm_joint"/>
+              
+              <!-- Joint 5: Wrist pitch -->
+              <joint name="arm_joint5" type="hinge" axis="0 1 0" range="-1.57 1.57"/>
+              <body name="arm_link5" pos="0 0 0.05">
+                <geom name="arm_link5_geom" type="capsule" size="0.015 0.04" pos="0 0 0.02" material="arm_link"/>
+                
+                <!-- Joint 6: Wrist yaw -->
+                <joint name="arm_joint6" type="hinge" axis="0 0 1" range="-3.14 3.14"/>
+                <body name="arm_link6" pos="0 0 0.06">
+                  <geom name="arm_link6_geom" type="cylinder" size="0.015 0.025" material="arm_joint"/>
+                  
+                  <!-- Gripper base -->
+                  <body name="gripper_base" pos="0 0 0.035">
+                    <geom name="gripper_base_geom" type="box" size="0.02 0.03 0.01" material="gripper"/>
+                    
+                    <!-- Left finger -->
+                    <joint name="gripper_left" type="slide" axis="0 1 0" range="0 0.035"/>
+                    <body name="gripper_left_body" pos="0 0.015 0.02">
+                      <geom name="gripper_left_geom" type="box" size="0.005 0.015 0.02" material="gripper"/>
+                    </body>
+                    
+                    <!-- Right finger (attached to base) -->
+                    <joint name="gripper_right" type="slide" axis="0 -1 0" range="0 0.035"/>
+                    <body name="gripper_right_body" pos="0 -0.015 0.02">
+                      <geom name="gripper_right_geom" type="box" size="0.005 0.015 0.02" material="gripper"/>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <!-- Actuators for arm (6 joints + 2 gripper = 8 additional motors) -->
+  <actuator>
+    <motor name="arm_motor1" joint="arm_joint1" gear="10" ctrlrange="-10 10"/>
+    <motor name="arm_motor2" joint="arm_joint2" gear="10" ctrlrange="-10 10"/>
+    <motor name="arm_motor3" joint="arm_joint3" gear="10" ctrlrange="-10 10"/>
+    <motor name="arm_motor4" joint="arm_joint4" gear="5" ctrlrange="-5 5"/>
+    <motor name="arm_motor5" joint="arm_joint5" gear="5" ctrlrange="-5 5"/>
+    <motor name="arm_motor6" joint="arm_joint6" gear="3" ctrlrange="-3 3"/>
+    <motor name="gripper_left_motor" joint="gripper_left" gear="1" ctrlrange="-1 1"/>
+    <motor name="gripper_right_motor" joint="gripper_right" gear="1" ctrlrange="-1 1"/>
+  </actuator>
+
+  <!-- Sensors for arm state feedback -->
+  <sensor>
+    <!-- Joint position sensors for arm -->
+    <jointpos name="arm_joint1_pos" joint="arm_joint1"/>
+    <jointpos name="arm_joint2_pos" joint="arm_joint2"/>
+    <jointpos name="arm_joint3_pos" joint="arm_joint3"/>
+    <jointpos name="arm_joint4_pos" joint="arm_joint4"/>
+    <jointpos name="arm_joint5_pos" joint="arm_joint5"/>
+    <jointpos name="arm_joint6_pos" joint="arm_joint6"/>
+    <jointpos name="gripper_left_pos" joint="gripper_left"/>
+    <jointpos name="gripper_right_pos" joint="gripper_right"/>
+    
+    <!-- Joint velocity sensors -->
+    <jointvel name="arm_joint1_vel" joint="arm_joint1"/>
+    <jointvel name="arm_joint2_vel" joint="arm_joint2"/>
+    <jointvel name="arm_joint3_vel" joint="arm_joint3"/>
+    <jointvel name="arm_joint4_vel" joint="arm_joint4"/>
+    <jointvel name="arm_joint5_vel" joint="arm_joint5"/>
+    <jointvel name="arm_joint6_vel" joint="arm_joint6"/>
+  </sensor>
+</mujoco>

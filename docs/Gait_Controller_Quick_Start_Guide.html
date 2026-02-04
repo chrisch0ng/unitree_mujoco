@@ -31,9 +31,54 @@
     <li>MuJoCo simulator installed</li>
     <li>Unitree SDK2 compiled</li>
     <li>Go2W robot model in <code>unitree_robots/go2w/</code></li>
+    <li>CMake 3.16+ installed (<code>sudo apt install cmake build-essential</code>)</li>
 </ul>
 
-<h3>1.2 Configuration</h3>
+<h3>1.2 Building the Code</h3>
+<p><strong>Why you need to build:</strong> The gait controller is C++ code that must be compiled into an executable binary before it can run. CMake generates the build configuration, and Make compiles the source code into machine code that your computer can execute.</p>
+
+<div class="info">
+<strong>Note:</strong> You must rebuild after modifying <code>gait_control.cpp</code> for changes to take effect.
+</div>
+
+<p><strong>Step 1: Create build directory and configure with CMake</strong></p>
+<p>This generates build files and detects dependencies (MuJoCo, Unitree SDK2):</p>
+<pre>
+cd ~/unitree_mujoco/simulate
+mkdir -p build
+cd build
+cmake ..
+</pre>
+
+<p>Expected output:</p>
+<pre>
+Release mode
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/.../unitree_mujoco/simulate/build
+</pre>
+
+<p><strong>Step 2: Compile all executables</strong></p>
+<pre>
+make -j4
+</pre>
+<p>The <code>-j4</code> flag uses 4 CPU cores for faster compilation. This creates:</p>
+<ul>
+    <li><code>unitree_mujoco</code> - Main MuJoCo simulator</li>
+    <li><code>gait_control</code> - Your gait controller</li>
+    <li><code>keyboard_control</code>, <code>joystick_control</code>, <code>walk</code> - Other controllers</li>
+</ul>
+
+<p><strong>Build only gait_control (faster):</strong></p>
+<pre>
+make gait_control
+</pre>
+
+<div class="warning">
+<strong>Build Errors?</strong> Ensure MuJoCo is properly linked in <code>simulate/mujoco</code> and Unitree SDK2 is installed at <code>/opt/unitree_robotics</code>.
+</div>
+
+<h3>1.4 Configuration</h3>
 <p>Edit <code>simulate/config.yaml</code> to set the robot:</p>
 <pre>
 robot: "go2w"           # Robot name
@@ -42,7 +87,7 @@ domain_id: 0            # DDS domain
 interface: "lo"         # Network interface (lo = localhost for sim)
 </pre>
 
-<h3>1.3 Starting the Simulation</h3>
+<h3>1.5 Starting the Simulation</h3>
 <p>Open two terminals:</p>
 
 <p><strong>Terminal 1 - Start MuJoCo Viewer:</strong></p>
@@ -57,7 +102,7 @@ cd ~/unitree_mujoco/simulate
 ./build/gait_control
 </pre>
 
-<h3>1.4 Keyboard Controls</h3>
+<h3>1.6 Keyboard Controls</h3>
 <table>
     <tr><th>Key</th><th>Action</th></tr>
     <tr><td>W / S</td><td>Move forward / backward</td></tr>
@@ -104,12 +149,12 @@ cd ~/unitree_mujoco/simulate
     <tr><th>Parameter</th><th>Default</th><th>Description</th></tr>
     <tr>
         <td><code>MOTOR_KP</code></td>
-        <td>80.0</td>
+        <td>100.0</td>
         <td><strong>Position gain (stiffness)</strong> - Higher = stiffer joints, faster response. Too high causes vibration</td>
     </tr>
     <tr>
         <td><code>MOTOR_KD</code></td>
-        <td>5.0</td>
+        <td>6.0</td>
         <td><strong>Velocity gain (damping)</strong> - Higher = more damping, less oscillation. Too high = sluggish</td>
     </tr>
 </table>
@@ -286,12 +331,24 @@ interface: "eth0"  # Change from "lo" to your network interface
     <tr><td><code>unitree_robots/go2w/scene.xml</code></td><td>Simulation scene</td></tr>
 </table>
 
-<h2>7. Building After Changes</h2>
-<p>After modifying <code>gait_control.cpp</code>:</p>
+<h2>7. Rebuilding After Changes</h2>
+<p>After modifying <code>gait_control.cpp</code>, you must rebuild for changes to take effect:</p>
+
+<p><strong>Quick rebuild (single target):</strong></p>
 <pre>
 cd ~/unitree_mujoco/simulate
 cmake --build build --target gait_control
 </pre>
+
+<p><strong>Or using Make:</strong></p>
+<pre>
+cd ~/unitree_mujoco/simulate/build
+make gait_control
+</pre>
+
+<div class="info">
+<strong>Tip:</strong> You only need to run <code>cmake ..</code> again if you add new files or change CMakeLists.txt. For simple code changes, just run <code>make</code>.
+</div>
 
 </body>
 </html>

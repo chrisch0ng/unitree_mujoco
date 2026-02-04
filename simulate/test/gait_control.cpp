@@ -22,13 +22,16 @@ constexpr double DEFAULT_GAIT_HEIGHT = 0.08;  // meters - How high feet lift dur
 // ---------- MOTOR CONTROL GAINS ----------
 // PD controller gains for joint position control
 
-constexpr double MOTOR_KP = 80.0;   // Position gain (stiffness)
+constexpr double MOTOR_KP = 100.0;  // Position gain (stiffness)
                                      // Higher = stiffer joints, faster response
                                      // Too high = vibration/instability
 
-constexpr double MOTOR_KD = 5.0;    // Velocity gain (damping)
+constexpr double MOTOR_KD = 6.0;    // Velocity gain (damping)
                                      // Higher = more damping, less oscillation
                                      // Too high = sluggish response
+
+constexpr double MOTOR_KP_WHEEL = 0;    // Wheels use velocity control
+constexpr double MOTOR_KD_WHEEL = 5.0;  // Wheel damping
 
 // ---------- VELOCITY LIMITS ----------
 // Maximum speeds the robot can achieve
@@ -72,8 +75,12 @@ constexpr double PRONK_TUCK_HEIGHT = 0.04;    // meters - How much to tuck feet 
 // For Go2W wheeled variant
 
 constexpr double WHEEL_SPEED_SCALE = 8.0;     // Multiplier from vx to wheel speed
-constexpr double WHEEL_TURN_SCALE = 3.0;      // Differential speed for turning
+constexpr double WHEEL_TURN_SCALE = 4.0;      // Differential speed for turning
 constexpr double WHEEL_KD = 5.0;              // Wheel damping gain
+
+// ---------- STANDUP SEQUENCE ----------
+constexpr double STANDUP_DURATION = 2.0;      // Seconds to stand up
+constexpr double INITIAL_BODY_HEIGHT = 0.15;  // Starting crouch height
 
 // ---------- GAIT TIMING PARAMETERS ----------
 // Defined in GAITS[] array below. Format:
@@ -226,52 +233,78 @@ public:
         double py = footPos.y;
         double pz = footPos.z;
 
-        double l1 = ABAD_LINK * sideSign;
+        double l1 = ABAD_LINK;
         double l2 = HIP_LINK;
         double l3 = KNEE_LINK;
 
-        // Distance calculations
-        double c = sqrt(px*px + py*py + pz*pz);  // Total distance
-        double a = fabs(l1);
-        double b = sqrt(c*c - a*a);  // Distance from shoulder to foot
-        if (b < 0.001) b = 0.001;  // Prevent divide by zero
-
-        // Q1: Hip abduction angle
-        double L = sqrt(py*py + pz*pz - l1*l1);
-        if (L < 0.001) L = 0.001;
-        q0 = atan2(pz*l1 + py*L, py*l1 - pz*L);
-
-        // Q3: Knee angle
-        double temp = (l2*l2 + l3*l3 - b*b) / (2*l2*l3);
-        temp = fmax(-1.0, fmin(1.0, temp));  // Clamp to [-1, 1]
-        q2 = -(M_PI - acos(temp));  // Knee flexion (negative)
-
-        // Q2: Hip angle
-        double a1 = py*sin(q0) - pz*cos(q0);
-        double a2 = px;
-        double m1 = -l3*sin(q2);
-        double m2 = -l2 - l3*cos(q2);
-        q1 = atan2(m1*a1 + m2*a2, m1*a2 - m2*a1);
+        // Q0: Hip abduction angle
+        // Project foot position onto YZ plane and solve for abduction
+        double L_xy = sqrt(py*py + pz*pz);
+        if (L_xy < 0.001) L_xy = 0.001;
+        
+        // Account for abduction link offset
+        double y_offset = sideSign * l1;
+        double py_eff = py - y_offset;
+        
+        // Solve for abduction angle
+        double c_abad = sqrt(py_eff*py_eff + pz*pz);
+        if (c_abad < 0.001) c_abad = 0.001;
+        
+        // Standard 2R IK in the abducted plane
+        q0 = sideSign * atan2(py_eff, -pz);
+        q0 = fmax(-1.0472, fmin(1.0472, q0));  // Clamp to joint limits
+        
+        // Transform to the thigh/knee plane after abduction
+        double py_rot = py * cos(q0) - pz * sin(q0);
+        double pz_rot = py * sin(q0) + pz * cos(q0);
+        
+        // Effective Y after abduction (should be close to y_offset)
+        double y_eff = py_rot;
+        double z_eff = -pz_rot;
+        
+        // Distance from hip joint to foot in sagittal plane
+        double r = sqrt(px*px + z_eff*z_eff);
+        if (r < 0.001) r = 0.001;
+        
+        // Knee angle using law of cosines
+        double cos_knee = (l2*l2 + l3*l3 - r*r) / (2*l2*l3);
+        cos_knee = fmax(-1.0, fmin(1.0, cos_knee));
+        q2 = -(M_PI - acos(cos_knee));  // Knee flexion (negative)
+        
+        // Hip angle
+        double alpha = atan2(px, z_eff);
+        double cos_beta = (l2*l2 + r*r - l3*l3) / (2*l2*r);
+        cos_beta = fmax(-1.0, fmin(1.0, cos_beta));
+        double beta = acos(cos_beta);
+        q1 = alpha + beta;
     }
 
     // Forward kinematics: joint angles to foot position (relative to hip)
     static Vec3 calcFootPos(int legID, double q0, double q1, double q2) {
         int sideSign = SIDE_SIGN[legID];
 
-        double l1 = ABAD_LINK * sideSign;
-        double l2 = -HIP_LINK;
-        double l3 = -KNEE_LINK;
+        double l1 = ABAD_LINK;  // Abduction link (always positive)
+        double l2 = HIP_LINK;   // Thigh link
+        double l3 = KNEE_LINK;  // Calf link
 
-        double s1 = sin(q0), c1 = cos(q0);
-        double s2 = sin(q1), c2 = cos(q1);
-        double s3 = sin(q2), c3 = cos(q2);
-        double c23 = c2*c3 - s2*s3;
-        double s23 = s2*c3 + c2*s3;
-
+        double s0 = sin(q0), c0 = cos(q0);
+        double s1 = sin(q1), c1 = cos(q1);
+        double s2 = sin(q2), c2 = cos(q2);
+        
+        // Rotation matrix for abduction (around X axis)
+        // After abduction, thigh rotates around Y axis
+        double s12 = sin(q1 + q2), c12 = cos(q1 + q2);
+        
         Vec3 pos;
-        pos.x = l3*s23 + l2*s2;
-        pos.y = -l3*s1*c23 + l1*c1 - l2*c2*s1;
-        pos.z = l3*c1*c23 + l1*s1 + l2*c1*c2;
+        // X position: forward/back from thigh and calf
+        pos.x = l2 * s1 + l3 * s12;
+        
+        // Y position: sideways from abduction
+        double y_local = l2 * c1 + l3 * c12;
+        pos.y = sideSign * l1 + y_local * s0;
+        
+        // Z position: vertical
+        pos.z = -y_local * c0;
 
         return pos;
     }
@@ -300,8 +333,11 @@ public:
         double passedTime = getTimeSeconds() - startTime;
 
         for (int i = 0; i < 4; i++) {
-            // Normalized time with phase offset
-            double normalT = fmod(passedTime + gait.period - gait.period * gait.bias[i], gait.period) / gait.period;
+            // Normalized time with phase offset - FIX: handle negative time properly
+            double phaseOffset = gait.period * gait.bias[i];
+            double normalT = fmod(passedTime - phaseOffset, gait.period);
+            if (normalT < 0) normalT += gait.period;  // Ensure positive
+            normalT /= gait.period;
 
             if (normalT < gait.stanceRatio) {
                 // Stance phase: foot on ground
@@ -318,8 +354,8 @@ public:
     double getTswing() { return GAITS[currentGait].period * (1.0 - GAITS[currentGait].stanceRatio); }
     double getTstance() { return GAITS[currentGait].period * GAITS[currentGait].stanceRatio; }
 
-private:
-    double getTimeSeconds() {
+    // Public time utility function
+    static double getTimeSeconds() {
         struct timeval tv;
         gettimeofday(&tv, NULL);
         return tv.tv_sec + tv.tv_usec * 1e-6;
@@ -345,13 +381,15 @@ public:
 // ============ Gait Controller ============
 class GaitController {
 public:
-    GaitController() : running(true), vx(0), vy(0), vyaw(0), gaitHeight(DEFAULT_GAIT_HEIGHT), bodyHeight(DEFAULT_BODY_HEIGHT) {
+    GaitController() : running(true), vx(0), vy(0), vyaw(0), gaitHeight(DEFAULT_GAIT_HEIGHT), 
+                       bodyHeight(DEFAULT_BODY_HEIGHT), standupPhase(0.0), isStandingUp(true) {
         wave = new WaveGenerator();
+        startTime = WaveGenerator::getTimeSeconds();
 
-        // Initialize foot positions to standing pose
+        // Initialize foot positions to standing pose - FIX: Y should be 0 (foot below hip)
         for (int i = 0; i < 4; i++) {
             // Default standing position relative to hip
-            standingFeet[i] = Vec3(0, SIDE_SIGN[i] * ABAD_LINK, -bodyHeight);
+            standingFeet[i] = Vec3(0, 0, -bodyHeight);
             swingStart[i] = standingFeet[i];
             swingEnd[i] = standingFeet[i];
         }
@@ -383,9 +421,13 @@ private:
 
     WaveGenerator* wave;
 
-    double vx, vy, vyaw;         // Velocity commands
+    double vx, vy, vyaw;          // Velocity commands
     double gaitHeight;            // Swing foot lift height
     double bodyHeight;            // Body height above ground
+    
+    double standupPhase;          // 0.0 to 1.0 standup progress
+    bool isStandingUp;            // True during standup sequence
+    double startTime;             // Controller start time
 
     Vec3 standingFeet[4];         // Default standing foot positions
     Vec3 swingStart[4];           // Start position of swing
@@ -464,8 +506,20 @@ void GaitController::Start() {
 void GaitController::ControlLoop() {
     if (!running) return;
 
-    // static int debugCounter = 0;
-    // bool debugPrint = (debugCounter++ % 250 == 0);  // Print every 250 iterations (~0.5 sec)
+    // Handle standup sequence
+    double currentBodyHeight;
+    if (isStandingUp) {
+        standupPhase += 0.005;  // Increment at ~500Hz
+        if (standupPhase >= 1.0) {
+            standupPhase = 1.0;
+            isStandingUp = false;
+        }
+        // Smooth interpolation from crouch to stand
+        double smoothPhase = tanh(standupPhase * 3.0);  // Faster rise
+        currentBodyHeight = INITIAL_BODY_HEIGHT + (bodyHeight - INITIAL_BODY_HEIGHT) * smoothPhase;
+    } else {
+        currentBodyHeight = bodyHeight;
+    }
 
     // Get gait phase and contact state
     int contact[4];
@@ -486,7 +540,7 @@ void GaitController::ControlLoop() {
     // Special case: Stand mode - just hold standing position
     if (wave->currentGait == GAIT_STAND) {
         for (int leg = 0; leg < 4; leg++) {
-            footPos[leg] = Vec3(0, SIDE_SIGN[leg] * ABAD_LINK, -bodyHeight);
+            footPos[leg] = Vec3(0, 0, -currentBodyHeight);
         }
         goto apply_ik;  // Skip gait logic
     }
@@ -526,7 +580,7 @@ void GaitController::ControlLoop() {
 
     // Initialize foot positions to standing pose
     for (int leg = 0; leg < 4; leg++) {
-        standingFeet[leg].z = -effectiveBodyHeight;
+        standingFeet[leg].z = -currentBodyHeight;
         footPos[leg] = standingFeet[leg];
     }
 
@@ -667,18 +721,22 @@ apply_ik:
     double turnDiff = vyaw * WHEEL_TURN_SCALE;
 
     for (int i = 12; i < 16; i++) {
-        low_cmd.motor_cmd()[i].q() = 0;
-        low_cmd.motor_cmd()[i].kp() = 0;
-        low_cmd.motor_cmd()[i].kd() = WHEEL_KD;
+        low_cmd.motor_cmd()[i].q() = PosStopF;  // Velocity control mode
+        low_cmd.motor_cmd()[i].kp() = MOTOR_KP_WHEEL;
+        low_cmd.motor_cmd()[i].kd() = MOTOR_KD_WHEEL;
         low_cmd.motor_cmd()[i].tau() = 0;
     }
 
-    // Right wheels (12, 14)
-    low_cmd.motor_cmd()[12].dq() = wheelSpeed - turnDiff;
-    low_cmd.motor_cmd()[14].dq() = wheelSpeed - turnDiff;
-    // Left wheels (13, 15)
-    low_cmd.motor_cmd()[13].dq() = wheelSpeed + turnDiff;
-    low_cmd.motor_cmd()[15].dq() = wheelSpeed + turnDiff;
+    // FIX: Correct wheel direction conventions for differential drive
+    // Right wheels (12=FR, 14=RR): positive = forward
+    // Left wheels (13=FL, 15=RL): negative = forward (opposite sign convention)
+    double rightSpeed = wheelSpeed - turnDiff;
+    double leftSpeed = -(wheelSpeed + turnDiff);  // Negate for left side
+    
+    low_cmd.motor_cmd()[12].dq() = rightSpeed;
+    low_cmd.motor_cmd()[14].dq() = rightSpeed;
+    low_cmd.motor_cmd()[13].dq() = leftSpeed;
+    low_cmd.motor_cmd()[15].dq() = leftSpeed;
 
     // Publish command
     low_cmd.crc() = Crc32((uint32_t*)&low_cmd, (sizeof(unitree_go::msg::dds_::LowCmd_) >> 2) - 1);
