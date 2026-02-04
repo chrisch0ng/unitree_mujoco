@@ -145,20 +145,24 @@ struct Vec3 {
 };
 
 // ============ Go2 Robot Parameters ============
-const double ABAD_LINK = 0.0955;   // Hip abduction link length (adjusted for Go2W)
-const double HIP_LINK = 0.213;     // Thigh link length
-const double KNEE_LINK = 0.2264;   // Calf to wheel center (Go2W)
+// THESE VALUES COME FROM go2w.xml - NEVER CHANGE
+const double ABAD_LINK = 0.0955;   // Hip abduction offset (from XML: thigh pos Y relative to hip)
+const double HIP_LINK = 0.213;     // Thigh length (from XML: calf pos Z relative to thigh)
+const double KNEE_LINK = 0.2264;   // Calf to wheel center (from XML: wheel pos Z relative to calf)
 
-// Hip positions relative to body center (x, y, z)
+// Hip positions relative to body center (from XML: hip body pos attribute)
+// NEVER CHANGE - These define robot geometry in world frame
 const Vec3 HIP_POS[4] = {
-    Vec3( 0.1934, -0.0465, 0),  // FR (leg 0)
-    Vec3( 0.1934,  0.0465, 0),  // FL (leg 1)
-    Vec3(-0.1934, -0.0465, 0),  // RR (leg 2)
-    Vec3(-0.1934,  0.0465, 0)   // RL (leg 3)
+    Vec3( 0.1934, -0.0465, 0),  // FR(0) - NEVER CHANGE (from XML FR_hip pos)
+    Vec3( 0.1934,  0.0465, 0),  // FL(1) - NEVER CHANGE (from XML FL_hip pos)
+    Vec3(-0.1934, -0.0465, 0),  // RR(2) - NEVER CHANGE (from XML RR_hip pos)
+    Vec3(-0.1934,  0.0465, 0)   // RL(3) - NEVER CHANGE (from XML RL_hip pos)
 };
 
-// Side sign for each leg (determines hip abduction direction)
-const int SIDE_SIGN[4] = {-1, 1, -1, 1};  // FR, FL, RR, RL
+// Side sign for each leg (determines thigh offset direction from XML)
+// From XML: left legs(FL,RL) have thigh pos Y=+0.0955, right legs(FR,RR) have Y=-0.0955
+// NEVER CHANGE
+const int SIDE_SIGN[4] = {-1, 1, -1, 1};  // FR(-), FL(+), RR(-), RL(+)
 
 // ============ Gait Types ============
 enum GaitType {
@@ -177,15 +181,21 @@ struct GaitParams {
     const char* name;
 };
 
-// Gait definitions (from mako_ctrl.cpp)
+// Gait definitions
 // {period, stanceRatio, {FR, FL, RR, RL phase biases}, name}
 GaitParams GAITS[] = {
-    {0.5,  0.35, {0.0, 0.5, 0.5, 0.0}, "Trot"},     // Running Trot (mako default)
-    {0.40, 0.60, {0.0, 0.5, 0.50, 0.0}, "Walk"},   // Walk (from mako) - walking trot 
-    {0.5,  0.30, {0.0, 0.0, 0.0, 0.0}, "Pronk"},    // Pronk (from mako)
-    {0.45, 0.50, {0.0, 0.0, 0.5, 0.5}, "Bound"},    // Bound (from mako)
-    {1.0,  1.0,  {0.0, 0.0, 0.0, 0.0}, "Stand"},    // All stance (no swing)
-    {0.5,  0.5,  {0.0, 0.0, 0.0, 0.0}, "Custom"}    // User-defined
+    // Trot: diagonal pairs move together - FR+RL, FL+RR
+    {0.5,  0.35, {0.0, 0.5, 0.5, 0.0}, "Trot"},
+    // Walk: sequential tripod - each leg starts 25% cycle after previous
+    {0.60, 0.75, {0.0, 0.25, 0.5, 0.75}, "Walk"},
+    // Pronk: all legs together (jump)
+    {0.5,  0.30, {0.0, 0.0, 0.0, 0.0}, "Pronk"},
+    // Bound: front pair, then back pair
+    {0.45, 0.50, {0.0, 0.0, 0.5, 0.5}, "Bound"},
+    // Stand: stationary
+    {1.0,  1.0,  {0.0, 0.0, 0.0, 0.0}, "Stand"},
+    // Custom: user-defined
+    {0.5,  0.5,  {0.0, 0.0, 0.0, 0.0}, "Custom"}
 };
 
 // Function to set custom gait parameters
@@ -199,14 +209,15 @@ void setCustomGait(double period, double stanceRatio, double biasFR, double bias
 }
 
 // ============ Joint Limits (from go2w.xml) ============
-const double ABAD_MIN = -1.0472;
-const double ABAD_MAX = 1.0472;
-const double FRONT_HIP_MIN = -1.5708;
-const double FRONT_HIP_MAX = 3.4907;
-const double BACK_HIP_MIN = -0.5236;
-const double BACK_HIP_MAX = 4.5379;
-const double KNEE_MIN = -2.7227;
-const double KNEE_MAX = -0.83776;
+// NEVER CHANGE - These match the <joint range="..."> attributes in XML
+const double ABAD_MIN = -1.0472;      // NEVER CHANGE (XML: abduction joint range)
+const double ABAD_MAX = 1.0472;       // NEVER CHANGE (XML: abduction joint range)
+const double FRONT_HIP_MIN = -1.5708; // NEVER CHANGE (XML: front_hip joint range)
+const double FRONT_HIP_MAX = 3.4907;  // NEVER CHANGE (XML: front_hip joint range)
+const double BACK_HIP_MIN = -0.5236;  // NEVER CHANGE (XML: back_hip joint range)
+const double BACK_HIP_MAX = 4.5379;   // NEVER CHANGE (XML: back_hip joint range)
+const double KNEE_MIN = -2.7227;      // NEVER CHANGE (XML: knee joint range)
+const double KNEE_MAX = -0.83776;     // NEVER CHANGE (XML: knee joint range)
 
 // ============ Inverse Kinematics ============
 class LegIK {
@@ -386,10 +397,13 @@ public:
         wave = new WaveGenerator();
         startTime = WaveGenerator::getTimeSeconds();
 
-        // Initialize foot positions to standing pose - FIX: Y should be 0 (foot below hip)
+        // Initialize foot positions to standing pose
+        // FIX: Y position must account for abduction link offset to have q0=0 (straight legs)
+        // When q0=0, foot Y = SIDE_SIGN * ABAD_LINK (from FK: pos.y = sideSign*l1 + ...)
         for (int i = 0; i < 4; i++) {
             // Default standing position relative to hip
-            standingFeet[i] = Vec3(0, 0, -bodyHeight);
+            // Y offset ensures legs hang straight down (q0=0) in neutral stance
+            standingFeet[i] = Vec3(0, SIDE_SIGN[i] * ABAD_LINK, -bodyHeight);
             swingStart[i] = standingFeet[i];
             swingEnd[i] = standingFeet[i];
         }
@@ -407,7 +421,18 @@ public:
         vyaw = fmax(-MAX_VYAW, fmin(MAX_VYAW, _vyaw));
     }
 
-    void setGait(GaitType gait) { wave->setGait(gait); }
+    void setGait(GaitType gait) { 
+        GaitType oldGait = wave->currentGait;
+        wave->setGait(gait); 
+        // Reset swing positions when changing to/from walking gaits
+        if (oldGait != gait) {
+            for (int i = 0; i < 4; i++) {
+                swingStart[i] = standingFeet[i];
+                swingEnd[i] = standingFeet[i];
+                lastContact[i] = 1;  // Start in stance
+            }
+        }
+    }
     GaitType getGait() { return wave->currentGait; }
 
     void setBodyHeight(double h) { bodyHeight = fmax(0.15, fmin(0.40, h)); }
@@ -536,13 +561,19 @@ void GaitController::ControlLoop() {
     // Calculate foot positions for each leg
     Vec3 footPos[4];
     double effectiveBodyHeight = bodyHeight;  // Declare before goto
+    
+    // Check if we should use wheels only (Go2W wheeled mode)
+    // Only in STAND gait or very low speeds - walking gaits should use legs
+    double v_linear = sqrt(vx*vx + vy*vy);
+    bool useWheelsOnly = (wave->currentGait == GAIT_STAND && v_linear < 0.8);
 
-    // Special case: Stand mode - just hold standing position
-    if (wave->currentGait == GAIT_STAND) {
+    // Special case: Stand mode or wheels-only driving
+    if (useWheelsOnly) {
         for (int leg = 0; leg < 4; leg++) {
-            footPos[leg] = Vec3(0, 0, -currentBodyHeight);
+            // FIX: Use same Y offset as initialization for straight legs
+            footPos[leg] = Vec3(0, SIDE_SIGN[leg] * ABAD_LINK, -currentBodyHeight);
         }
-        goto apply_ik;  // Skip gait logic
+        goto apply_ik;  // Skip gait logic - wheels handle movement
     }
 
     // For pronk, modulate effective body height to create crouch-push-flight cycle
@@ -621,30 +652,22 @@ void GaitController::ControlLoop() {
             double liftHeight = swingZ - (-effectiveBodyHeight);
 
             // Compensation for joint limits during swing
-            // Back legs have restricted hip range - need backward offset to lift properly
+            // NOTE: Compensation is applied symmetrically to avoid turning
             GaitType currentGait = wave->currentGait;
 
             if (fabs(vx) > 0.05) {
-                // Moving: directional compensation
+                // Moving: small symmetric compensation for all legs
+                // Back legs need slightly more offset due to restricted hip range
+                double baseComp = (leg >= 2) ? COMP_TROT_WALK_BACK * 0.3 : COMP_TROT_WALK_BACK * 0.1;
                 double compensationDir = (vx > 0) ? -1.0 : 1.0;
-
-                if (currentGait == GAIT_TROT || currentGait == GAIT_WALK || currentGait == GAIT_BOUND) {
-                    if (leg >= 2) {
-                        swingX += compensationDir * liftHeight * COMP_TROT_WALK_BACK;
-                    }
-                } else if (currentGait == GAIT_PRONK) {
-                    if (leg >= 2) {
-                        swingX += compensationDir * liftHeight * COMP_PRONK_BACK;
-                    } else {
-                        swingX += compensationDir * liftHeight * COMP_PRONK_FRONT;
-                    }
+                
+                if (currentGait == GAIT_PRONK) {
+                    baseComp = (leg >= 2) ? COMP_PRONK_BACK * 0.3 : COMP_PRONK_FRONT * 0.3;
                 }
-            } else {
-                // Standing still: backward offset for back legs to allow lifting
-                if (leg >= 2) {
-                    swingX -= liftHeight * 1.0;
-                }
+                
+                swingX += compensationDir * liftHeight * baseComp;
             }
+            // Removed standing-still compensation that caused asymmetric offsets
 
             footPos[leg].x = swingX;
             footPos[leg].y = Trajectory::cycloidXY(swingStart[leg].y, swingEnd[leg].y, phase[leg]);
@@ -721,17 +744,17 @@ apply_ik:
     double turnDiff = vyaw * WHEEL_TURN_SCALE;
 
     for (int i = 12; i < 16; i++) {
-        low_cmd.motor_cmd()[i].q() = PosStopF;  // Velocity control mode
+        low_cmd.motor_cmd()[i].q() = 0;  // Position target (not used in vel mode)
         low_cmd.motor_cmd()[i].kp() = MOTOR_KP_WHEEL;
         low_cmd.motor_cmd()[i].kd() = MOTOR_KD_WHEEL;
         low_cmd.motor_cmd()[i].tau() = 0;
     }
 
-    // FIX: Correct wheel direction conventions for differential drive
-    // Right wheels (12=FR, 14=RR): positive = forward
-    // Left wheels (13=FL, 15=RL): negative = forward (opposite sign convention)
+    // Wheel direction conventions (matches keyboard_control.cpp)
+    // Right wheels (12=FR, 14=RR): wheelSpeed - turnDiff
+    // Left wheels (13=FL, 15=RL): wheelSpeed + turnDiff
     double rightSpeed = wheelSpeed - turnDiff;
-    double leftSpeed = -(wheelSpeed + turnDiff);  // Negate for left side
+    double leftSpeed = wheelSpeed + turnDiff;
     
     low_cmd.motor_cmd()[12].dq() = rightSpeed;
     low_cmd.motor_cmd()[14].dq() = rightSpeed;
@@ -911,19 +934,22 @@ int main(int argc, char** argv) {
     double gaitHeight = DEFAULT_GAIT_HEIGHT;
     const double decay = VELOCITY_DECAY;
 
+    // Key state tracking for simultaneous input
+    bool key_w = false, key_s = false, key_a = false, key_d = false, key_q = false, key_e = false;
+
     bool running = true;
     while (running) {
-        // Process keyboard
+        // Process all pending keyboard input
         while (kbhit()) {
             char c = getchar();
             switch (c) {
-                // Movement
-                case 'w': case 'W': vx = KEY_VX; break;
-                case 's': case 'S': vx = -KEY_VX; break;
-                case 'a': case 'A': vyaw = KEY_VYAW; break;
-                case 'd': case 'D': vyaw = -KEY_VYAW; break;
-                case 'q': case 'Q': vy = KEY_VY; break;
-                case 'e': case 'E': vy = -KEY_VY; break;
+                // Movement - set key states
+                case 'w': case 'W': key_w = true; break;
+                case 's': case 'S': key_s = true; break;
+                case 'a': case 'A': key_a = true; break;
+                case 'd': case 'D': key_d = true; break;
+                case 'q': case 'Q': key_q = true; break;
+                case 'e': case 'E': key_e = true; break;
 
                 // Gaits
                 case '1': controller.setGait(GAIT_TROT); std::cout << "Gait: Trot" << std::endl; break;
@@ -974,15 +1000,36 @@ int main(int argc, char** argv) {
             }
         }
 
-        // Decay velocities
-        vx *= decay;
-        vy *= decay;
-        vyaw *= decay;
+        // Compute velocities from accumulated key states
+        // Keys accumulate during the while(kbhit()) loop above
+        double target_vx = 0, target_vy = 0, target_vyaw = 0;
+        if (key_w) target_vx += KEY_VX;
+        if (key_s) target_vx -= KEY_VX;
+        if (key_a) target_vyaw += KEY_VYAW;
+        if (key_d) target_vyaw -= KEY_VYAW;
+        if (key_q) target_vy += KEY_VY;
+        if (key_e) target_vy -= KEY_VY;
 
-        // Apply small threshold
-        if (fabs(vx) < 0.01) vx = 0;
-        if (fabs(vy) < 0.01) vy = 0;
-        if (fabs(vyaw) < 0.01) vyaw = 0;
+        // INSTANT full speed when key pressed, decay when released
+        // Use direct assignment for max responsiveness
+        if (target_vx != 0) vx = target_vx;
+        else vx *= decay;
+        
+        if (target_vy != 0) vy = target_vy;
+        else vy *= decay;
+        
+        if (target_vyaw != 0) vyaw = target_vyaw;
+        else vyaw *= decay;
+
+        // Apply threshold
+        if (fabs(vx) < 0.001) vx = 0;
+        if (fabs(vy) < 0.001) vy = 0;
+        if (fabs(vyaw) < 0.001) vyaw = 0;
+
+        // Reset key states - they will be set again next frame if keys are still held
+        // Terminal auto-repeat sends repeated keypresses when held
+        bool any_key_this_frame = key_w || key_s || key_a || key_d || key_q || key_e;
+        key_w = key_s = key_a = key_d = key_q = key_e = false;
 
         controller.setVelocity(vx, vy, vyaw);
 
