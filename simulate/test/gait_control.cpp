@@ -166,12 +166,14 @@ const int SIDE_SIGN[4] = {-1, 1, -1, 1};  // FR(-), FL(+), RR(-), RL(+)
 
 // ============ Gait Types ============
 enum GaitType {
-    GAIT_TROT = 0,
-    GAIT_WALK = 1,
-    GAIT_PRONK = 2,
-    GAIT_BOUND = 3,
-    GAIT_STAND = 4,
-    GAIT_CUSTOM = 5
+    GAIT_TROT = 0,        // 1: Trot (backward)
+    GAIT_WALK = 1,        // 2: Walk (backward)
+    GAIT_TROT_FWD = 2,    // 3: Trot (forward)
+    GAIT_WALK_FWD = 3,    // 4: Walk (forward)
+    GAIT_PRONK = 4,       // 5: Pronk (jump)
+    GAIT_BOUND = 5,       // 6: Bound (gallop)
+    GAIT_STAND = 6,       // 0: Stand
+    GAIT_CUSTOM = 7
 };
 
 struct GaitParams {
@@ -184,10 +186,14 @@ struct GaitParams {
 // Gait definitions
 // {period, stanceRatio, {FR, FL, RR, RL phase biases}, name}
 GaitParams GAITS[] = {
-    // Trot: diagonal pairs move together - FR+RL, FL+RR
+    // Trot (backward): diagonal pairs move together
     {0.5,  0.35, {0.0, 0.5, 0.5, 0.0}, "Trot"},
-    // Walk: sequential tripod - each leg starts 25% cycle after previous
+    // Walk (backward): sequential
     {0.60, 0.75, {0.0, 0.25, 0.5, 0.75}, "Walk"},
+    // Trot (forward): same phases but inverted step direction
+    {0.5,  0.35, {0.0, 0.5, 0.5, 0.0}, "TrotF"},
+    // Walk (forward): same phases but inverted step direction  
+    {0.60, 0.75, {0.0, 0.25, 0.5, 0.75}, "WalkF"},
     // Pronk: all legs together (jump)
     {0.5,  0.30, {0.0, 0.0, 0.0, 0.0}, "Pronk"},
     // Bound: front pair, then back pair
@@ -635,9 +641,17 @@ void GaitController::ControlLoop() {
                 // Calculate next footstep location based on velocity
                 double Tswing = wave->getTswing();
                 double Tstance = wave->getTstance();
+                
+                // Forward/backward multiplier: -1 for backward gaits, +1 for forward gaits
+                double fwdMult = 1.0;
+                if (wave->currentGait == GAIT_TROT || wave->currentGait == GAIT_WALK) {
+                    fwdMult = -1.0;  // Original gaits walk backward
+                } else if (wave->currentGait == GAIT_TROT_FWD || wave->currentGait == GAIT_WALK_FWD) {
+                    fwdMult = 1.0;   // New gaits walk forward
+                }
 
                 // Raibert heuristic: step to where we need to be
-                double stepX = vx * Tstance / 2 + vx * (1 - phase[leg]) * Tswing;
+                double stepX = fwdMult * vx * Tstance / 2 + fwdMult * vx * (1 - phase[leg]) * Tswing;
                 double stepY = vy * Tstance / 2 + vy * (1 - phase[leg]) * Tswing;
 
                 // Calculate swing end position
@@ -793,12 +807,14 @@ void printHelp() {
     std::cout << "  A/D     : Turn left/right" << std::endl;
     std::cout << "  Q/E     : Strafe left/right" << std::endl;
     std::cout << "\nGaits:" << std::endl;
-    std::cout << "  1       : Trot (diagonal)" << std::endl;
-    std::cout << "  2       : Walk (sequential)" << std::endl;
-    std::cout << "  3       : Pronk (jump)" << std::endl;
-    std::cout << "  4       : Bound (gallop)" << std::endl;
-    std::cout << "  5       : Stand" << std::endl;
-    std::cout << "  0/C     : Custom WaveGenerator (enter your own values)" << std::endl;
+    std::cout << "  1       : Trot (backward)" << std::endl;
+    std::cout << "  2       : Walk (backward)" << std::endl;
+    std::cout << "  3       : Trot (forward)" << std::endl;
+    std::cout << "  4       : Walk (forward)" << std::endl;
+    std::cout << "  5       : Pronk (jump)" << std::endl;
+    std::cout << "  6       : Bound (gallop)" << std::endl;
+    std::cout << "  0       : Stand" << std::endl;
+    std::cout << "  C       : Custom WaveGenerator (enter your own values)" << std::endl;
     std::cout << "  P       : Print current gait parameters" << std::endl;
     std::cout << "\nHeight:" << std::endl;
     std::cout << "  R/F     : Body height up/down" << std::endl;
@@ -952,12 +968,14 @@ int main(int argc, char** argv) {
                 case 'e': case 'E': key_e = true; break;
 
                 // Gaits
-                case '1': controller.setGait(GAIT_TROT); std::cout << "Gait: Trot" << std::endl; break;
-                case '2': controller.setGait(GAIT_WALK); std::cout << "Gait: Walk" << std::endl; break;
-                case '3': controller.setGait(GAIT_PRONK); std::cout << "Gait: Pronk" << std::endl; break;
-                case '4': controller.setGait(GAIT_BOUND); std::cout << "Gait: Bound" << std::endl; break;
-                case '5': controller.setGait(GAIT_STAND); std::cout << "Gait: Stand" << std::endl; break;
-                case '0': case 'c': case 'C':
+                case '1': controller.setGait(GAIT_TROT); std::cout << "Gait: Trot (backward)" << std::endl; break;
+                case '2': controller.setGait(GAIT_WALK); std::cout << "Gait: Walk (backward)" << std::endl; break;
+                case '3': controller.setGait(GAIT_TROT_FWD); std::cout << "Gait: Trot (forward)" << std::endl; break;
+                case '4': controller.setGait(GAIT_WALK_FWD); std::cout << "Gait: Walk (forward)" << std::endl; break;
+                case '5': controller.setGait(GAIT_PRONK); std::cout << "Gait: Pronk" << std::endl; break;
+                case '6': controller.setGait(GAIT_BOUND); std::cout << "Gait: Bound" << std::endl; break;
+                case '0': controller.setGait(GAIT_STAND); std::cout << "Gait: Stand" << std::endl; break;
+                case 'c': case 'C':
                     if (inputCustomGait()) {
                         controller.setGait(GAIT_CUSTOM);
                         std::cout << "Gait: Custom" << std::endl;
