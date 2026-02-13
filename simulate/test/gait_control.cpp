@@ -557,12 +557,20 @@ void GaitController::ControlLoop() {
     double phase[4];
     wave->calcContactPhase(contact, phase);
 
-    // if (debugPrint) {
-    //     printf("\n=== DEBUG: %s Gait ===\n", GAITS[wave->currentGait].name);
-    //     printf("Leg:     FR(0)   FL(1)   RR(2)   RL(3)\n");
-    //     printf("Contact: %d       %d       %d       %d\n", contact[0], contact[1], contact[2], contact[3]);
-    //     printf("Phase:   %.2f    %.2f    %.2f    %.2f\n", phase[0], phase[1], phase[2], phase[3]);
-    // }
+    static int debugCounter = 0;
+    bool debugPrint = (debugCounter++ % 100 == 0);  // Print every 100 iterations (~1 sec)
+    
+    if (debugPrint && vx != 0) {
+        double fwdMult = 1.0;
+        if (wave->currentGait == GAIT_TROT || wave->currentGait == GAIT_WALK) {
+            fwdMult = -1.0;
+        } else if (wave->currentGait == GAIT_TROT_FWD || wave->currentGait == GAIT_WALK_FWD) {
+            fwdMult = 1.0;
+        }
+        printf("\n=== %s === vx=%.2f fwdMult=%+.1f ===\n", GAITS[wave->currentGait].name, vx, fwdMult);
+        printf("Leg:     FR(0)   FL(1)   RR(2)   RL(3)\n");
+        printf("Contact: %d       %d       %d       %d\n", contact[0], contact[1], contact[2], contact[3]);
+    }
 
     // Calculate foot positions for each leg
     Vec3 footPos[4];
@@ -653,6 +661,10 @@ void GaitController::ControlLoop() {
                 // Raibert heuristic: step to where we need to be
                 double stepX = fwdMult * vx * Tstance / 2 + fwdMult * vx * (1 - phase[leg]) * Tswing;
                 double stepY = vy * Tstance / 2 + vy * (1 - phase[leg]) * Tswing;
+                
+                if (debugPrint && leg == 0) {
+                    printf("  stepX=%+.3f (fwdMult=%+.1f * vx=%.2f)\n", stepX, fwdMult, vx);
+                }
 
                 // Calculate swing end position
                 swingEnd[leg].x = stepX;
@@ -665,35 +677,22 @@ void GaitController::ControlLoop() {
             double swingZ = Trajectory::cycloidZ(-effectiveBodyHeight, gaitHeight, phase[leg]);
             double liftHeight = swingZ - (-effectiveBodyHeight);
 
-            // Compensation for joint limits during swing
-            // NOTE: Compensation is applied symmetrically to avoid turning
-            GaitType currentGait = wave->currentGait;
-
-            if (fabs(vx) > 0.05) {
-                // Moving: small symmetric compensation for all legs
-                // Back legs need slightly more offset due to restricted hip range
-                double baseComp = (leg >= 2) ? COMP_TROT_WALK_BACK * 0.3 : COMP_TROT_WALK_BACK * 0.1;
-                double compensationDir = (vx > 0) ? -1.0 : 1.0;
-                
-                if (currentGait == GAIT_PRONK) {
-                    baseComp = (leg >= 2) ? COMP_PRONK_BACK * 0.3 : COMP_PRONK_FRONT * 0.3;
-                }
-                
-                swingX += compensationDir * liftHeight * baseComp;
-            }
-            // Removed standing-still compensation that caused asymmetric offsets
+            // Compensation DISABLED - was causing backward walking issues
 
             footPos[leg].x = swingX;
             footPos[leg].y = Trajectory::cycloidXY(swingStart[leg].y, swingEnd[leg].y, phase[leg]);
             footPos[leg].z = swingZ;
+            
+            if (debugPrint) {
+                const char* names[4] = {"FR", "FL", "RR", "RL"};
+                printf("  %s: footPos=(%+.2f, %+.2f, %+.2f) %s\n", 
+                       names[leg], footPos[leg].x, footPos[leg].y, footPos[leg].z,
+                       contact[leg] ? "STANCE" : "SWING");
+            }
         }
 
         lastContact[leg] = contact[leg];
     }
-
-    // if (debugPrint) {
-    //     printf("FootPos (x,y,z):\n");
-    //     for (int i = 0; i < 4; i++) {
     //         printf("  Leg%d: (%.3f, %.3f, %.3f)\n", i, footPos[i].x, footPos[i].y, footPos[i].z);
     //     }
     // }

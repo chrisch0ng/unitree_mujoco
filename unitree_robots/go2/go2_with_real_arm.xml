@@ -1,0 +1,391 @@
+<mujoco model="go2_with_real_piper_arm">
+  <!-- Use assets directory for all meshes -->
+  <compiler angle="radian" meshdir="assets" autolimits="true" />
+
+  <option cone="elliptic" impratio="100" />
+
+  <default>
+    <default class="go2">
+      <geom friction="0.4" margin="0.001" condim="1"/>
+      <joint axis="0 1 0" damping="0.1" armature="0.01" frictionloss="0.2"/>
+      <motor ctrlrange="-23.7 23.7"/>
+      <default class="abduction">
+        <joint axis="1 0 0" range="-1.0472 1.0472"/>
+      </default>
+      <default class="hip">
+        <default class="front_hip">
+          <joint range="-1.5708 3.4907"/>
+        </default>
+        <default class="back_hip">
+          <joint range="-0.5236 4.5379"/>
+        </default>
+      </default>
+      <default class="knee">
+        <joint range="-2.7227 -0.83776"/>
+        <motor ctrlrange="-45.43 45.43"/>
+      </default>
+      <default class="visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="2"/>
+      </default>
+      <default class="collision">
+        <geom group="3"/>
+        <default class="foot">
+          <geom size="0.022" pos="-0.002 0 -0.213" priority="1" condim="6"
+            friction="0.4 0.02 0.01"/>
+        </default>
+      </default>
+    </default>
+    <default class="piper_arm">
+      <joint damping="0.5" armature="0.01" frictionloss="0.1"/>
+      <motor ctrlrange="-10 10"/>
+    </default>
+  </default>
+
+  <asset>
+    <!-- Go2 robot materials -->
+    <material name="metal" rgba=".9 .95 .95 1" />
+    <material name="black" rgba="0 0 0 1" />
+    <material name="white" rgba="1 1 1 1" />
+    <material name="gray" rgba="0.671705 0.692426 0.774270 1" />
+    
+    <!-- Piper arm materials -->
+    <material name="piper_metal" rgba="0.79 0.82 0.93 1"/>
+    <material name="piper_black" rgba="0.2 0.2 0.2 1"/>
+
+    <!-- Go2 robot meshes -->
+    <mesh file="base_0.obj" />
+    <mesh file="base_1.obj" />
+    <mesh file="base_2.obj" />
+    <mesh file="base_3.obj" />
+    <mesh file="base_4.obj" />
+    <mesh file="hip_0.obj" />
+    <mesh file="hip_1.obj" />
+    <mesh file="thigh_0.obj" />
+    <mesh file="thigh_1.obj" />
+    <mesh file="thigh_mirror_0.obj" />
+    <mesh file="thigh_mirror_1.obj" />
+    <mesh file="calf_0.obj" />
+    <mesh file="calf_1.obj" />
+    <mesh file="calf_mirror_0.obj" />
+    <mesh file="calf_mirror_1.obj" />
+    <mesh file="foot.obj" />
+    
+    <!-- Piper arm meshes (in subdirectory) -->
+    <mesh name="piper_base" file="../piper_meshes/base_link.stl"/>
+    <mesh name="piper_link1" file="../piper_meshes/link1.stl"/>
+    <mesh name="piper_link2" file="../piper_meshes/link2.stl"/>
+    <mesh name="piper_link3" file="../piper_meshes/link3.stl"/>
+    <mesh name="piper_link4" file="../piper_meshes/link4.stl"/>
+    <mesh name="piper_link5" file="../piper_meshes/link5.stl"/>
+    <mesh name="piper_link6" file="../piper_meshes/link6.stl"/>
+    <mesh name="piper_link7" file="../piper_meshes/link7.stl"/>
+    <mesh name="piper_link8" file="../piper_meshes/link8.stl"/>
+  </asset>
+
+  <worldbody>
+    <!-- Go2 Robot Body -->
+    <body name="base_link" pos="0 0 0.445" childclass="go2">
+      <inertial pos="0.021112 0 -0.005366" quat="-0.000543471 0.713435 -0.00173769 0.700719"
+        mass="6.921"
+        diaginertia="0.107027 0.0980771 0.0244531" />
+      <freejoint />
+      <geom mesh="base_0" material="black" class="visual" />
+      <geom mesh="base_1" material="black" class="visual" />
+      <geom mesh="base_2" material="black" class="visual" />
+      <geom mesh="base_3" material="white" class="visual" />
+      <geom mesh="base_4" material="gray" class="visual" />
+      <geom size="0.1881 0.04675 0.057" type="box" class="collision" />
+      <geom size="0.05 0.045" pos="0.285 0 0.01" type="cylinder" class="collision" />
+      <geom size="0.047" pos="0.293 0 -0.06" class="collision" />
+      <site name="imu" pos="-0.02557 0 0.04232" />
+      
+      <!-- FL Leg -->
+      <body name="FL_hip" pos="0.1934 0.0465 0">
+        <inertial pos="-0.0054 0.00194 -0.000105" quat="0.497014 0.499245 0.505462 0.498237"
+          mass="0.678"
+          diaginertia="0.00088403 0.000596003 0.000479967" />
+        <joint name="FL_hip_joint" class="abduction" />
+        <geom mesh="hip_0" material="metal" class="visual" />
+        <geom mesh="hip_1" material="gray" class="visual" />
+        <geom size="0.046 0.02" pos="0 0.08 0" quat="1 1 0 0" type="cylinder" class="collision" />
+        <body name="FL_thigh" pos="0 0.0955 0">
+          <inertial pos="-0.00374 -0.0223 -0.0327" quat="0.829533 0.0847635 -0.0200632 0.551623"
+            mass="1.152"
+            diaginertia="0.00594973 0.00584149 0.000878787" />
+          <joint name="FL_thigh_joint" class="front_hip" />
+          <geom mesh="thigh_0" material="metal" class="visual" />
+          <geom mesh="thigh_1" material="gray" class="visual" />
+          <geom size="0.1065 0.01225 0.017" pos="0 0 -0.1065" quat="0.707107 0 0.707107 0"
+            type="box" class="collision" />
+          <body name="FL_calf" pos="0 0 -0.213">
+            <inertial pos="0.00629595 -0.000622121 -0.141417"
+              quat="0.710672 0.00154099 -0.00450087 0.703508"
+              mass="0.241352" diaginertia="0.0014901 0.00146356 5.31397e-05" />
+            <joint name="FL_calf_joint" class="knee" />
+            <geom mesh="calf_0" material="gray" class="visual" />
+            <geom mesh="calf_1" material="metal" class="visual" />
+            <geom name="FL_foot" size="0.022" pos="0 0 -0.213" class="foot" />
+          </body>
+        </body>
+      </body>
+      
+      <!-- FR Leg -->
+      <body name="FR_hip" pos="0.1934 -0.0465 0">
+        <inertial pos="-0.0054 -0.00194 -0.000105" quat="0.497014 -0.499245 0.505462 -0.498237"
+          mass="0.678"
+          diaginertia="0.00088403 0.000596003 0.000479967" />
+        <joint name="FR_hip_joint" class="abduction" />
+        <geom mesh="hip_0" material="metal" class="visual" />
+        <geom mesh="hip_1" material="gray" class="visual" />
+        <geom size="0.046 0.02" pos="0 -0.08 0" quat="1 -1 0 0" type="cylinder" class="collision" />
+        <body name="FR_thigh" pos="0 -0.0955 0">
+          <inertial pos="-0.00374 0.0223 -0.0327" quat="0.829533 -0.0847635 -0.0200632 -0.551623"
+            mass="1.152"
+            diaginertia="0.00594973 0.00584149 0.000878787" />
+          <joint name="FR_thigh_joint" class="front_hip" />
+          <geom mesh="thigh_mirror_0" material="metal" class="visual" />
+          <geom mesh="thigh_mirror_1" material="gray" class="visual" />
+          <geom size="0.1065 0.01225 0.017" pos="0 0 -0.1065" quat="0.707107 0 0.707107 0"
+            type="box" class="collision" />
+          <body name="FR_calf" pos="0 0 -0.213">
+            <inertial pos="0.00629595 0.000622121 -0.141417"
+              quat="0.710672 -0.00154099 -0.00450087 -0.703508"
+              mass="0.241352" diaginertia="0.0014901 0.00146356 5.31397e-05" />
+            <joint name="FR_calf_joint" class="knee" />
+            <geom mesh="calf_mirror_0" material="gray" class="visual" />
+            <geom mesh="calf_mirror_1" material="metal" class="visual" />
+            <geom name="FR_foot" size="0.022" pos="0 0 -0.213" class="foot" />
+          </body>
+        </body>
+      </body>
+      
+      <!-- RL Leg -->
+      <body name="RL_hip" pos="-0.1934 0.0465 0">
+        <inertial pos="0.0054 0.00194 -0.000105" quat="0.497014 0.499245 -0.505462 -0.498237"
+          mass="0.678"
+          diaginertia="0.00088403 0.000596003 0.000479967" />
+        <joint name="RL_hip_joint" class="abduction" />
+        <geom mesh="hip_0" material="metal" class="visual" />
+        <geom mesh="hip_1" material="gray" class="visual" />
+        <geom size="0.046 0.02" pos="0 0.08 0" quat="1 1 0 0" type="cylinder" class="collision" />
+        <body name="RL_thigh" pos="0 0.0955 0">
+          <inertial pos="0.00374 -0.0223 -0.0327" quat="0.829533 0.0847635 0.0200632 -0.551623"
+            mass="1.152"
+            diaginertia="0.00594973 0.00584149 0.000878787" />
+          <joint name="RL_thigh_joint" class="back_hip" />
+          <geom mesh="thigh_0" material="metal" class="visual" />
+          <geom mesh="thigh_1" material="gray" class="visual" />
+          <geom size="0.1065 0.01225 0.017" pos="0 0 -0.1065" quat="0.707107 0 0.707107 0"
+            type="box" class="collision" />
+          <body name="RL_calf" pos="0 0 -0.213">
+            <inertial pos="-0.00629595 -0.000622121 -0.141417"
+              quat="0.710672 0.00154099 0.00450087 -0.703508"
+              mass="0.241352" diaginertia="0.0014901 0.00146356 5.31397e-05" />
+            <joint name="RL_calf_joint" class="knee" />
+            <geom mesh="calf_0" material="gray" class="visual" />
+            <geom mesh="calf_1" material="metal" class="visual" />
+            <geom name="RL_foot" size="0.022" pos="0 0 -0.213" class="foot" />
+          </body>
+        </body>
+      </body>
+      
+      <!-- RR Leg -->
+      <body name="RR_hip" pos="-0.1934 -0.0465 0">
+        <inertial pos="0.0054 -0.00194 -0.000105" quat="0.497014 -0.499245 -0.505462 0.498237"
+          mass="0.678"
+          diaginertia="0.00088403 0.000596003 0.000479967" />
+        <joint name="RR_hip_joint" class="abduction" />
+        <geom mesh="hip_0" material="metal" class="visual" />
+        <geom mesh="hip_1" material="gray" class="visual" />
+        <geom size="0.046 0.02" pos="0 -0.08 0" quat="1 -1 0 0" type="cylinder" class="collision" />
+        <body name="RR_thigh" pos="0 -0.0955 0">
+          <inertial pos="0.00374 0.0223 -0.0327" quat="0.829533 -0.0847635 0.0200632 0.551623"
+            mass="1.152"
+            diaginertia="0.00594973 0.00584149 0.000878787" />
+          <joint name="RR_thigh_joint" class="back_hip" />
+          <geom mesh="thigh_mirror_0" material="metal" class="visual" />
+          <geom mesh="thigh_mirror_1" material="gray" class="visual" />
+          <geom size="0.1065 0.01225 0.017" pos="0 0 -0.1065" quat="0.707107 0 0.707107 0"
+            type="box" class="collision" />
+          <body name="RR_calf" pos="0 0 -0.213">
+            <inertial pos="-0.00629595 0.000622121 -0.141417"
+              quat="0.710672 -0.00154099 0.00450087 0.703508"
+              mass="0.241352" diaginertia="0.0014901 0.00146356 5.31397e-05" />
+            <joint name="RR_calf_joint" class="knee" />
+            <geom mesh="calf_mirror_0" material="gray" class="visual" />
+            <geom mesh="calf_mirror_1" material="metal" class="visual" />
+            <geom name="RR_foot" size="0.022" pos="0 0 -0.213" class="foot" />
+          </body>
+        </body>
+      </body>
+      
+      <!-- ==================================================================== -->
+      <!-- PIPER ARM - PROPERLY CONVERTED FROM URDF -->
+      <!-- ==================================================================== -->
+      <!-- Arm attached to front of robot body -->
+      <!-- URDF joint1: xyz="0 0 0.123" rpy="0 0 -1.5708" -->
+      <body name="piper_base" pos="0.18 0 0.08" quat="0.707 0 0 0.707" childclass="piper_arm">
+        <!-- Base mesh at local origin -->
+        <geom name="arm_base_geom" type="mesh" mesh="piper_base" material="piper_metal"/>
+        
+        <!-- Joint 1: Base rotation -->
+        <!-- URDF: axis="0 0 1" (Z-axis rotation in arm frame) -->
+        <joint name="arm_joint1" type="hinge" axis="0 0 1" range="-2.618 2.618"/>
+        
+        <!-- link1 body at joint1 location -->
+        <!-- URDF: joint1 origin xyz="0 0 0.123" -->
+        <body name="arm_link1" pos="0 0 0.123">
+          <!-- Mesh origin is at joint, so no offset needed -->
+          <geom name="arm_link1_geom" type="mesh" mesh="piper_link1" material="piper_metal"/>
+          
+          <!-- Joint 2: Shoulder -->
+          <!-- URDF: xyz="0 0 0" rpy="1.5708 -0.10095 -1.5708" -->
+          <!-- This is a 90deg X rotation, -0.1rad Y, -90deg Z -->
+          <joint name="arm_joint2" type="hinge" axis="0 0 1" range="0 3.14"/>
+          
+          <!-- link2 body - apply the URDF rotation -->
+          <body name="arm_link2" pos="0 0 0" quat="0.707 0 0 0.707">
+            <!-- Need to counter-rotate the mesh to align with URDF frame -->
+            <!-- URDF mesh is defined in link2 frame which is rotated -->
+            <geom name="arm_link2_geom" type="mesh" mesh="piper_link2" material="piper_metal" 
+                  quat="0.707 0 0 -0.707"/>
+            
+            <!-- Joint 3: Elbow -->
+            <!-- URDF: xyz="0.28503 0 0" rpy="0 0 1.3826" -->
+            <joint name="arm_joint3" type="hinge" axis="0 0 1" range="-2.967 0"/>
+            
+            <body name="arm_link3" pos="0.285 0 0" quat="0.195 0 0 0.981">
+              <geom name="arm_link3_geom" type="mesh" mesh="piper_link3" material="piper_metal" 
+                    quat="0.707 0 0 -0.707"/>
+              
+              <!-- Joint 4: Wrist roll -->
+              <!-- URDF: xyz="0.021984 0.25075 0" rpy="-1.5708 0 0" -->
+              <joint name="arm_joint4" type="hinge" axis="0 0 1" range="-1.832 1.832"/>
+              
+              <body name="arm_link4" pos="0.022 0.251 0" quat="0.707 0 0 -0.707">
+                <geom name="arm_link4_geom" type="mesh" mesh="piper_link4" material="piper_metal" 
+                      quat="0.707 0 0 0.707"/>
+                
+                <!-- Joint 5: Wrist pitch -->
+                <joint name="arm_joint5" type="hinge" axis="0 0 1" range="-1.832 1.832"/>
+                
+                <body name="arm_link5" pos="0 0 0">
+                  <geom name="arm_link5_geom" type="mesh" mesh="piper_link5" material="piper_metal" 
+                        quat="0.707 0 0 -0.707"/>
+                  
+                  <!-- Joint 6: Wrist yaw -->
+                  <joint name="arm_joint6" type="hinge" axis="0 0 1" range="-1.832 1.832"/>
+                  
+                  <body name="arm_link6" pos="0 0.06 0">
+                    <geom name="arm_link6_geom" type="mesh" mesh="piper_link6" material="piper_metal" 
+                          quat="0.707 0 0 -0.707"/>
+                    
+                    <!-- Gripper base -->
+                    <body name="gripper_base" pos="0 0.04 0">
+                      <geom name="gripper_base_geom" type="mesh" mesh="piper_link7" material="piper_metal" 
+                            quat="0.707 0 0 -0.707"/>
+                      
+                      <!-- Left finger -->
+                      <body name="gripper_left" pos="0 0.02 0.015">
+                        <geom name="gripper_left_geom" type="mesh" mesh="piper_link8" material="piper_black" 
+                              quat="0.707 0 0 -0.707"/>
+                        <joint name="gripper_left_joint" type="slide" axis="0 1 0" range="0 0.035"/>
+                      </body>
+                      
+                      <!-- Right finger -->
+                      <body name="gripper_right" pos="0 0.02 -0.015">
+                        <geom name="gripper_right_geom" type="mesh" mesh="piper_link8" material="piper_black" 
+                              quat="0.707 0 0 -0.707"/>
+                        <joint name="gripper_right_joint" type="slide" axis="0 -1 0" range="0 0.035"/>
+                      </body>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <!-- Body motors -->
+    <motor name="FR_hip" joint="FR_hip_joint" class="abduction" />
+    <motor name="FR_thigh" joint="FR_thigh_joint" class="hip" />
+    <motor name="FR_calf" joint="FR_calf_joint" class="knee" />
+    <motor name="FL_hip" joint="FL_hip_joint" class="abduction" />
+    <motor name="FL_thigh" joint="FL_thigh_joint" class="hip" />
+    <motor name="FL_calf" joint="FL_calf_joint" class="knee" />
+    <motor name="RR_hip" joint="RR_hip_joint" class="abduction" />
+    <motor name="RR_thigh" joint="RR_thigh_joint" class="hip" />
+    <motor name="RR_calf" joint="RR_calf_joint" class="knee" />
+    <motor name="RL_hip" joint="RL_hip_joint" class="abduction" />
+    <motor name="RL_thigh" joint="RL_thigh_joint" class="hip" />
+    <motor name="RL_calf" joint="RL_calf_joint" class="knee" />
+    
+    <!-- Arm motors -->
+    <motor name="arm_motor1" joint="arm_joint1" gear="10" ctrlrange="-10 10"/>
+    <motor name="arm_motor2" joint="arm_joint2" gear="10" ctrlrange="-10 10"/>
+    <motor name="arm_motor3" joint="arm_joint3" gear="10" ctrlrange="-10 10"/>
+    <motor name="arm_motor4" joint="arm_joint4" gear="5" ctrlrange="-5 5"/>
+    <motor name="arm_motor5" joint="arm_joint5" gear="5" ctrlrange="-5 5"/>
+    <motor name="arm_motor6" joint="arm_joint6" gear="3" ctrlrange="-3 3"/>
+    <motor name="gripper_left_motor" joint="gripper_left_joint" gear="1" ctrlrange="-1 1"/>
+    <motor name="gripper_right_motor" joint="gripper_right_joint" gear="1" ctrlrange="-1 1"/>
+  </actuator>
+
+  <sensor>
+    <!-- Body sensors -->
+    <jointpos name="FR_hip_pos" joint="FR_hip_joint"/>
+    <jointpos name="FR_thigh_pos" joint="FR_thigh_joint"/>
+    <jointpos name="FR_calf_pos" joint="FR_calf_joint"/>
+    <jointpos name="FL_hip_pos" joint="FL_hip_joint"/>
+    <jointpos name="FL_thigh_pos" joint="FL_thigh_joint"/>
+    <jointpos name="FL_calf_pos" joint="FL_calf_joint"/>
+    <jointpos name="RR_hip_pos" joint="RR_hip_joint"/>
+    <jointpos name="RR_thigh_pos" joint="RR_thigh_joint"/>
+    <jointpos name="RR_calf_pos" joint="RR_calf_joint"/>
+    <jointpos name="RL_hip_pos" joint="RL_hip_joint"/>
+    <jointpos name="RL_thigh_pos" joint="RL_thigh_joint"/>
+    <jointpos name="RL_calf_pos" joint="RL_calf_joint"/>
+    <jointvel name="FR_hip_vel" joint="FR_hip_joint"/>
+    <jointvel name="FR_thigh_vel" joint="FR_thigh_joint"/>
+    <jointvel name="FR_calf_vel" joint="FR_calf_joint"/>
+    <jointvel name="FL_hip_vel" joint="FL_hip_joint"/>
+    <jointvel name="FL_thigh_vel" joint="FL_thigh_joint"/>
+    <jointvel name="FL_calf_vel" joint="FL_calf_joint"/>
+    <jointvel name="RR_hip_vel" joint="RR_hip_joint"/>
+    <jointvel name="RR_thigh_vel" joint="RR_thigh_joint"/>
+    <jointvel name="RR_calf_vel" joint="RR_calf_joint"/>
+    <jointvel name="RL_hip_vel" joint="RL_hip_joint"/>
+    <jointvel name="RL_thigh_vel" joint="RL_thigh_joint"/>
+    <jointvel name="RL_calf_vel" joint="RL_calf_joint"/>
+    <jointvel name="FR_hip_torque" joint="FR_hip_joint"/>
+    <jointvel name="FR_thigh_torque" joint="FR_thigh_joint"/>
+    <jointvel name="FR_calf_torque" joint="FR_calf_joint"/>
+    <jointvel name="FL_hip_torque" joint="FL_hip_joint"/>
+    <jointvel name="FL_thigh_torque" joint="FL_thigh_joint"/>
+    <jointvel name="FL_calf_torque" joint="FL_calf_joint"/>
+    <jointvel name="RR_hip_torque" joint="RR_hip_joint"/>
+    <jointvel name="RR_thigh_torque" joint="RR_thigh_joint"/>
+    <jointvel name="RR_calf_torque" joint="RR_calf_joint"/>
+    <jointvel name="RL_hip_torque" joint="RL_hip_joint"/>
+    <jointvel name="RL_thigh_torque" joint="RL_thigh_joint"/>
+    <jointvel name="RL_calf_torque" joint="RL_calf_joint"/>
+    
+    <!-- Arm sensors -->
+    <jointpos name="arm_joint1_pos" joint="arm_joint1"/>
+    <jointpos name="arm_joint2_pos" joint="arm_joint2"/>
+    <jointpos name="arm_joint3_pos" joint="arm_joint3"/>
+    <jointpos name="arm_joint4_pos" joint="arm_joint4"/>
+    <jointpos name="arm_joint5_pos" joint="arm_joint5"/>
+    <jointpos name="arm_joint6_pos" joint="arm_joint6"/>
+    <jointvel name="arm_joint1_vel" joint="arm_joint1"/>
+    <jointvel name="arm_joint2_vel" joint="arm_joint2"/>
+    <jointvel name="arm_joint3_vel" joint="arm_joint3"/>
+    <jointvel name="arm_joint4_vel" joint="arm_joint4"/>
+    <jointvel name="arm_joint5_vel" joint="arm_joint5"/>
+    <jointvel name="arm_joint6_vel" joint="arm_joint6"/>
+  </sensor>
+</mujoco>
